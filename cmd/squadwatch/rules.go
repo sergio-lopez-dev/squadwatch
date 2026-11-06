@@ -8,7 +8,7 @@ import (
 func rulesCatalog() [][]string {
 	var out [][]string
 	for _, r := range rules.Catalog {
-		out = append(out, []string{r.ID, report.Sev(r.Sev), r.Title})
+		out = append(out, []string{r.ID, report.Sev(r.Sev), T(r.Title)})
 	}
 	return out
 }

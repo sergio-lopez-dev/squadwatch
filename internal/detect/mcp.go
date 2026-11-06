@@ -13,7 +13,7 @@ import (
 // parseServers reads an MCP server map in any of the common formats:
 // Claude/Cursor/Gemini/Windsurf ("mcpServers"), VS Code ("servers") and
 // Codex (TOML [mcp_servers.NAME]).
-func parseServers(m map[string]any, d *doc, scope string) []model.MCPServer {
+func (e *Env) parseServers(m map[string]any, d *doc, scope string) []model.MCPServer {
 	var out []model.MCPServer
 	for _, name := range sortedKeys(m) {
 		sm, ok := m[name].(map[string]any)
@@ -51,24 +51,24 @@ func parseServers(m map[string]any, d *doc, scope string) []model.MCPServer {
 		env := getMap(sm, "env")
 		for _, k := range sortedKeys(env) {
 			s.EnvKeys = append(s.EnvKeys, k)
-			addSecret(&s, d, raw, k, anyString(env[k]), "variable de entorno")
+			addSecret(&s, d, raw, k, anyString(env[k]), e.T("variable de entorno"))
 		}
 		for _, hk := range []string{"headers", "http_headers"} {
 			h := getMap(sm, hk)
 			for _, k := range sortedKeys(h) {
-				addSecret(&s, d, raw, k, anyString(h[k]), "cabecera HTTP")
+				addSecret(&s, d, raw, k, anyString(h[k]), e.T("cabecera HTTP"))
 			}
 		}
 		for _, k := range []string{"bearer_token", "apiKey", "api_key", "token"} {
 			if v := getStr(sm, k); v != "" {
-				addSecret(&s, d, raw, k, v, "campo")
+				addSecret(&s, d, raw, k, v, e.T("campo"))
 			}
 		}
-		argSecrets(&s, d, raw)
-		urlSecrets(&s, d, raw, s.URL, "URL")
+		e.argSecrets(&s, d, raw)
+		e.urlSecrets(&s, d, raw, s.URL, "URL")
 		for _, a := range s.Args {
 			if strings.Contains(a, "://") {
-				urlSecrets(&s, d, raw, a, "argumento")
+				e.urlSecrets(&s, d, raw, a, e.T("argumento"))
 			}
 		}
 
@@ -110,23 +110,23 @@ func addSecret(s *model.MCPServer, d *doc, raw map[string]bool, key, val, where 
 	s.Secrets = append(s.Secrets, model.Secret{Key: key, Masked: redact.Mask(v), Where: where, Line: d.line(v)})
 }
 
-func argSecrets(s *model.MCPServer, d *doc, raw map[string]bool) {
+func (e *Env) argSecrets(s *model.MCPServer, d *doc, raw map[string]bool) {
 	for i, a := range s.Args {
 		if k, v, ok := strings.Cut(a, "="); ok && strings.HasPrefix(k, "-") && redact.LooksSecretKey(k) {
-			addSecret(s, d, raw, k, v, "argumento")
+			addSecret(s, d, raw, k, v, e.T("argumento"))
 			continue
 		}
 		if strings.HasPrefix(a, "-") && redact.LooksSecretKey(a) && i+1 < len(s.Args) && !strings.HasPrefix(s.Args[i+1], "-") {
-			addSecret(s, d, raw, a, s.Args[i+1], "argumento")
+			addSecret(s, d, raw, a, s.Args[i+1], e.T("argumento"))
 			continue
 		}
 		if redact.TokenLike(a) {
-			addSecret(s, d, raw, "argumento", a, "argumento")
+			addSecret(s, d, raw, e.T("argumento"), a, e.T("argumento"))
 		}
 	}
 }
 
-func urlSecrets(s *model.MCPServer, d *doc, raw map[string]bool, rawURL, where string) {
+func (e *Env) urlSecrets(s *model.MCPServer, d *doc, raw map[string]bool, rawURL, where string) {
 	if rawURL == "" {
 		return
 	}
@@ -136,7 +136,7 @@ func urlSecrets(s *model.MCPServer, d *doc, raw map[string]bool, rawURL, where s
 	}
 	if pw, ok := u.User.Password(); ok && pw != "" && !redact.IsReference(pw) {
 		raw[pw] = true
-		s.Secrets = append(s.Secrets, model.Secret{Key: "contraseña en " + where, Masked: redact.Mask(pw), Where: where, Line: d.line(pw)})
+		s.Secrets = append(s.Secrets, model.Secret{Key: e.T("contraseña en %s", where), Masked: redact.Mask(pw), Where: where, Line: d.line(pw)})
 	}
 	for k, vs := range u.Query() {
 		for _, v := range vs {
@@ -168,7 +168,7 @@ func analyzePin(s *model.MCPServer) {
 		ver := npmVersion(pkg)
 		switch {
 		case pkg == "":
-			s.Pin = "desconocido"
+			s.Pin, s.Pinned = "desconocido", true
 		case ver == "":
 			s.Pin = "sin fijar"
 		case ver == "latest" || ver == "next":
@@ -186,7 +186,7 @@ func analyzePin(s *model.MCPServer) {
 		}
 		switch {
 		case pkg == "":
-			s.Pin = "desconocido"
+			s.Pin, s.Pinned = "desconocido", true
 		case strings.Contains(pkg, "=="):
 			s.Pin, s.Pinned = strings.SplitN(pkg, "==", 2)[1], true
 		case strings.Contains(pkg, "@") && !strings.HasSuffix(pkg, "@latest"):
@@ -198,7 +198,7 @@ func analyzePin(s *model.MCPServer) {
 		img := dockerImage(args)
 		switch {
 		case img == "":
-			s.Pin = "desconocido"
+			s.Pin, s.Pinned = "desconocido", true
 		case strings.Contains(img, "@sha256:"):
 			s.Pin, s.Pinned = "digest", true
 		case strings.Contains(img[strings.LastIndex(img, "/")+1:], ":") && !strings.HasSuffix(img, ":latest"):

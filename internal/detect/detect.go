@@ -28,6 +28,9 @@ func All(e *Env) []model.Agent {
 	for _, d := range detectors {
 		if a := d(e); a != nil {
 			sanitize(a)
+			for i := range a.MCP {
+				a.MCP[i].Pin = e.T(a.MCP[i].Pin) // "sin fijar", "remoto"… ; versions pass through
+			}
 			if a.MCP == nil {
 				a.MCP = []model.MCPServer{}
 			}

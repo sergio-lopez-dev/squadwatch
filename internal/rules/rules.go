@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sergio-lopez-dev/squadwatch/internal/i18n"
 	"github.com/sergio-lopez-dev/squadwatch/internal/model"
 	"github.com/sergio-lopez-dev/squadwatch/internal/redact"
 )
@@ -61,7 +62,7 @@ var Catalog = []Rule{
 	{"MCP-006", model.High, "Servidor de ficheros con acceso a todo el HOME o al disco",
 		"Incluye ~/.ssh, ~/.config y los .env de todos tus proyectos.",
 		"Limita la raíz del servidor a las carpetas que necesites.", []string{llm06}},
-	{"MCP-007", model.Med, "Aprueba solo los servidores MCP de cualquier proyecto",
+	{"MCP-007", model.Med, "Aprueba automáticamente los servidores MCP de cualquier proyecto",
 		"Un repositorio clonado puede traer su propio .mcp.json y el agente lo arrancará sin preguntarte.",
 		"Aprueba los servidores de cada proyecto uno a uno.", []string{llm03}},
 	{"HK-001", model.High, "Un hook ejecuta un script que otros pueden modificar",
@@ -93,6 +94,7 @@ type collector struct {
 	byKey map[string]*model.Finding
 	order []string
 	home  string
+	lang  i18n.Lang
 }
 
 func (c *collector) add(rule string, a *model.Agent, ev model.Evidence, fix string, sev model.Severity) {
@@ -103,7 +105,7 @@ func (c *collector) add(rule string, a *model.Agent, ev model.Evidence, fix stri
 	key := strings.ToLower(rule) + ":" + a.ID
 	f, ok := c.byKey[key]
 	if !ok {
-		f = &model.Finding{Key: key, ID: r.ID, Sev: sev, Agent: a.ID, Title: r.Title, Why: r.Why, Fix: r.Fix, Refs: r.Refs}
+		f = &model.Finding{Key: key, ID: r.ID, Sev: sev, Agent: a.ID, Title: c.lang.T(r.Title), Why: c.lang.T(r.Why), Fix: c.lang.T(r.Fix), Refs: r.Refs}
 		c.byKey[key] = f
 		c.order = append(c.order, key)
 	} else if sev.Rank() > f.Sev.Rank() {
@@ -129,8 +131,8 @@ func (c *collector) add(rule string, a *model.Agent, ev model.Evidence, fix stri
 
 // Evaluate returns the findings for all agents, worst first. Agents must
 // already have their trifecta computed.
-func Evaluate(agents []model.Agent, home string) []model.Finding {
-	c := &collector{byKey: map[string]*model.Finding{}, home: home}
+func Evaluate(agents []model.Agent, home string, lang i18n.Lang) []model.Finding {
+	c := &collector{byKey: map[string]*model.Finding{}, home: home, lang: lang}
 	for i := range agents {
 		a := &agents[i]
 		for _, s := range a.Signals {
@@ -141,9 +143,9 @@ func Evaluate(agents []model.Agent, home string) []model.Finding {
 		}
 		for _, f := range a.Instr {
 			if f.Hidden > 0 {
-				text := fmt.Sprintf("%d caracteres invisibles", f.Hidden)
+				text := c.lang.T("%d caracteres invisibles", f.Hidden)
 				if f.Decoded != "" {
-					text += fmt.Sprintf(" · dicen: %q", truncate(f.Decoded, 120))
+					text += c.lang.T(" · dicen: %q", truncate(f.Decoded, 120))
 				}
 				c.add("INS-001", a, model.Evidence{File: f.Path, Line: f.Line, Text: text}, "", "")
 			}
@@ -158,21 +160,21 @@ func Evaluate(agents []model.Agent, home string) []model.Finding {
 			if !t.Complete {
 				continue
 			}
-			label := "En cualquier proyecto"
+			label := c.lang.T("En cualquier proyecto")
 			if st.Project != "" {
-				label = "En " + st.Project
+				label = c.lang.T("En %s", st.Project)
 				where = append(where, st.Project)
 			}
-			c.add("TRI-001", a, model.Evidence{Text: label + " · datos privados: " + strings.Join(t.PrivWhy, ", ")}, "", "")
-			c.add("TRI-001", a, model.Evidence{Text: label + " · contenido no fiable: " + strings.Join(t.UntrWhy, ", ")}, "", "")
-			c.add("TRI-001", a, model.Evidence{Text: label + " · salida sin confirmación: " + strings.Join(t.OutWhy, ", ")}, "", "")
+			c.add("TRI-001", a, model.Evidence{Text: label + c.lang.T(" · datos privados: %s", strings.Join(t.PrivWhy, ", "))}, "", "")
+			c.add("TRI-001", a, model.Evidence{Text: label + c.lang.T(" · contenido no fiable: %s", strings.Join(t.UntrWhy, ", "))}, "", "")
+			c.add("TRI-001", a, model.Evidence{Text: label + c.lang.T(" · salida sin confirmación: %s", strings.Join(t.OutWhy, ", "))}, "", "")
 		}
 		if len(where) > 0 {
-			those := "ese proyecto"
+			those := c.lang.T("ese proyecto")
 			if len(where) > 1 {
-				those = "esos proyectos"
+				those = c.lang.T("esos proyectos")
 			}
-			c.byKey["tri-001:"+a.ID].Fix = "Rompe uno de los tres lados en " + strings.Join(where, " y ") + ". Lo más fácil suele ser que la salida pida confirmación: quita de allow las reglas con comodín de " + those + "."
+			c.byKey["tri-001:"+a.ID].Fix = c.lang.T("Rompe uno de los tres lados en %s. Lo más fácil suele ser que la salida pida confirmación: quita de allow las reglas con comodín de %s.", strings.Join(where, c.lang.T(" y ")), those)
 		}
 	}
 	out := make([]model.Finding, 0, len(c.order))
@@ -196,7 +198,7 @@ func mcpRules(c *collector, a *model.Agent, s model.MCPServer, home string) {
 		c.add("MCP-001", a, model.Evidence{File: s.File, Line: first(sec.Line, s.Line),
 			Text: fmt.Sprintf("%s → %s (%s) = %s", s.Name, sec.Key, sec.Where, sec.Masked)}, "", "")
 	}
-	if !s.Pinned && s.Pin != "desconocido" {
+	if !s.Pinned {
 		c.add("MCP-002", a, model.Evidence{File: s.File, Line: s.Line,
 			Text: fmt.Sprintf("%s: %s %s (%s)", s.Name, s.Command, strings.Join(s.Args, " "), s.Pin)}, "", "")
 	}
@@ -207,8 +209,8 @@ func mcpRules(c *collector, a *model.Agent, s model.MCPServer, home string) {
 		for _, arg := range s.Args {
 			p := filepath.Clean(strings.Replace(arg, "~", home, 1))
 			if p == "/" || p == home {
-				c.add("MCP-006", a, model.Evidence{File: s.File, Line: s.Line, Text: s.Name + ": raíz " + arg},
-					"Cambia la raíz "+arg+" por las carpetas concretas que necesites.", "")
+				c.add("MCP-006", a, model.Evidence{File: s.File, Line: s.Line, Text: c.lang.T("%s: raíz %s", s.Name, arg)},
+					c.lang.T("Cambia la raíz %s por las carpetas concretas que necesites.", arg), "")
 			}
 		}
 	}

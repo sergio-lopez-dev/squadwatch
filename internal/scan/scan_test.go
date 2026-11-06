@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sergio-lopez-dev/squadwatch/internal/detect"
+	"github.com/sergio-lopez-dev/squadwatch/internal/i18n"
 	"github.com/sergio-lopez-dev/squadwatch/internal/model"
 	"github.com/sergio-lopez-dev/squadwatch/internal/sysinfo"
 )
@@ -89,6 +90,7 @@ func fakeEnv(home string) *detect.Env {
 	e.Listeners = nil
 	e.LookPath = nil
 	e.NoSystem = true
+	e.Lang = i18n.ES
 	return e
 }
 
@@ -299,5 +301,31 @@ func TestScoreDoesNotSaturate(t *testing.T) {
 	after := Run(fakeEnv(home)).Agent("claude-code").Risk
 	if after >= before {
 		t.Errorf("quitar Read(~/**) debería bajar el riesgo: %d → %d", before, after)
+	}
+}
+
+func TestEnglishScan(t *testing.T) {
+	home, _, _ := claudeHome(t, `{"permissions": {"allow": ["Bash(bundle exec *)", "Read(~/**)"]}}`)
+	e := fakeEnv(home)
+	e.Lang = i18n.EN
+	s := Run(e)
+	a := s.Agent("claude-code")
+	if a.Kind != "Coding CLI" || a.Sandbox != "off" {
+		t.Errorf("agent not in English: kind %q, sandbox %q", a.Kind, a.Sandbox)
+	}
+	var tri *model.Finding
+	for i := range s.Findings {
+		if s.Findings[i].ID == "TRI-001" {
+			tri = &s.Findings[i]
+		}
+	}
+	if tri == nil || tri.Title != "Meets the lethal trifecta" || !strings.HasPrefix(tri.Evidence[0].Text, "In ~/api · private data: your whole HOME") {
+		t.Fatalf("TRI-001 not in English: %+v", tri)
+	}
+	b, _ := json.Marshal(s)
+	for _, es := range []string{"ficheros del", "sin preguntar", "datos privados", "Cumple la trifecta"} {
+		if strings.Contains(string(b), es) {
+			t.Errorf("Spanish text %q left in an English scan", es)
+		}
 	}
 }

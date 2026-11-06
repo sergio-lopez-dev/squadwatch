@@ -1,7 +1,6 @@
 package detect
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -95,7 +94,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 	if !exists(dir) && !exists(state) && bin == "" {
 		return nil
 	}
-	a := &model.Agent{ID: "claude-code", Name: "Claude Code", Kind: "CLI de código", Binary: e.short(bin)}
+	a := &model.Agent{ID: "claude-code", Name: "Claude Code", Kind: e.T("CLI de código"), Binary: e.short(bin)}
 	if bin != "" {
 		if target, err := filepath.EvalSymlinks(bin); err == nil {
 			a.Version = versionRe.FindString(target)
@@ -108,13 +107,13 @@ func detectClaudeCode(e *Env) *model.Agent {
 		if a.Version == "" {
 			a.Version = first(getStr(st.Data, "lastReleaseNotesSeen"), getStr(st.Data, "lastOnboardingVersion"))
 		}
-		a.MCP = append(a.MCP, parseServers(getMap(st.Data, "mcpServers"), st, "usuario")...)
+		a.MCP = append(a.MCP, e.parseServers(getMap(st.Data, "mcpServers"), st, e.T("usuario"))...)
 		prj := getMap(st.Data, "projects")
 		for _, p := range sortedKeys(prj) {
 			pm, _ := prj[p].(map[string]any)
 			sp := e.short(p)
 			projects = append(projects, p)
-			a.MCP = append(a.MCP, inProject(parseServers(getMap(pm, "mcpServers"), st, "proyecto "+sp), sp)...)
+			a.MCP = append(a.MCP, inProject(e.parseServers(getMap(pm, "mcpServers"), st, e.T("proyecto %s", sp)), sp)...)
 			for _, t := range getStrSlice(pm, "allowedTools") {
 				a.Perms = append(a.Perms, model.Perm{Rule: t, Kind: "allow", Project: sp, Ref: st.ref(ruleNeedle(t))})
 			}
@@ -123,15 +122,15 @@ func detectClaudeCode(e *Env) *model.Agent {
 
 	type src struct{ path, scope, project string }
 	files := []src{
-		{"/etc/claude-code/managed-settings.json", "gestionado", ""},
-		{filepath.Join(dir, "settings.json"), "usuario", ""},
-		{filepath.Join(dir, "settings.local.json"), "usuario", ""},
+		{"/etc/claude-code/managed-settings.json", e.T("gestionado"), ""},
+		{filepath.Join(dir, "settings.json"), e.T("usuario"), ""},
+		{filepath.Join(dir, "settings.local.json"), e.T("usuario"), ""},
 	}
 	for _, p := range projects {
 		sp := e.short(p)
 		files = append(files,
-			src{filepath.Join(p, ".claude", "settings.json"), "proyecto " + sp, sp},
-			src{filepath.Join(p, ".claude", "settings.local.json"), "proyecto " + sp, sp})
+			src{filepath.Join(p, ".claude", "settings.json"), e.T("proyecto %s", sp), sp},
+			src{filepath.Join(p, ".claude", "settings.local.json"), e.T("proyecto %s", sp), sp})
 	}
 
 	mode := ""
@@ -144,7 +143,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 		}
 		a.Configs = append(a.Configs, d.Short)
 		if err != nil {
-			a.Extras = append(a.Extras, "No se pudo leer "+d.Short)
+			a.Extras = append(a.Extras, e.T("No se pudo leer %s", d.Short))
 			continue
 		}
 		perms := getMap(d.Data, "permissions")
@@ -161,7 +160,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 			if m == "bypassPermissions" {
 				bypassIn[f.project] = true
 				a.Flag("AGT-001", "permissions.defaultMode = \"bypassPermissions\" ("+f.scope+")",
-					"Cambia defaultMode a \"acceptEdits\" o \"default\" y añade \"disableBypassPermissionsMode\": \"disable\".", d.ref("defaultMode"))
+					e.T("Cambia defaultMode a \"acceptEdits\" o \"default\" y añade \"disableBypassPermissionsMode\": \"disable\"."), d.ref("defaultMode"))
 			}
 		}
 		if getStr(perms, "disableBypassPermissionsMode") == "disable" {
@@ -170,20 +169,20 @@ func detectClaudeCode(e *Env) *model.Agent {
 		for _, dirx := range getStrSlice(perms, "additionalDirectories") {
 			full := filepath.Clean(e.expand(dirx))
 			if full == "/" || full == e.Home {
-				a.Grants = append(a.Grants, model.Grant{Cap: model.Priv, Kind: "read", Reason: "todo tu HOME (additionalDirectories)", Project: f.project})
-				a.Flag("SEC-001", "permissions.additionalDirectories incluye "+dirx+" ("+f.scope+")",
-					"Quita "+dirx+" de additionalDirectories y añade solo las carpetas que necesites.", d.ref(dirx))
+				a.Grants = append(a.Grants, model.Grant{Cap: model.Priv, Kind: "read", Reason: e.T("todo tu HOME (additionalDirectories)"), Project: f.project})
+				a.Flag("SEC-001", e.T("permissions.additionalDirectories incluye %s (%s)", dirx, f.scope),
+					e.T("Quita %s de additionalDirectories y añade solo las carpetas que necesites.", dirx), d.ref(dirx))
 			}
 		}
 		if getBool(d.Data, "enableAllProjectMcpServers") {
 			a.Flag("MCP-007", "enableAllProjectMcpServers = true ("+f.scope+")",
-				"Quita enableAllProjectMcpServers y aprueba cada servidor de .mcp.json uno a uno.", d.ref("enableAllProjectMcpServers"))
+				e.T("Quita enableAllProjectMcpServers y aprueba cada servidor de .mcp.json uno a uno."), d.ref("enableAllProjectMcpServers"))
 		}
 		if sb := getMap(d.Data, "sandbox"); sb != nil {
 			if getBool(sb, "enabled") {
 				sandboxIn = append(sandboxIn, f.project)
 				a.Mitigations = append(a.Mitigations, model.Mitigation{Covers: "out-bash", Project: f.project, Ref: d.ref("sandbox"),
-					Detail: "sandbox de Bash activada (" + f.scope + "): limita la red y los ficheros de los comandos"})
+					Detail: e.T("sandbox de Bash activada (%s): limita la red y los ficheros de los comandos", f.scope)})
 			}
 		}
 		parseClaudeHooks(e, a, d, f.project)
@@ -193,7 +192,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 		if d, err := e.readJSON(filepath.Join(p, ".mcp.json")); d != nil && err == nil {
 			sp := e.short(p)
 			a.Configs = append(a.Configs, d.Short)
-			a.MCP = append(a.MCP, inProject(parseServers(getMap(d.Data, "mcpServers"), d, "proyecto "+sp+" (.mcp.json)"), sp)...)
+			a.MCP = append(a.MCP, inProject(e.parseServers(getMap(d.Data, "mcpServers"), d, e.T("proyecto %s (.mcp.json)", sp)), sp)...)
 		}
 	}
 
@@ -201,17 +200,20 @@ func detectClaudeCode(e *Env) *model.Agent {
 		mode = "default"
 	}
 	if n := len(bypassIn); n > 0 && !bypassIn[""] {
-		mode += fmt.Sprintf(" · bypassPermissions en %s", plural(n, "proyecto", "proyectos"))
+		mode += e.T(" · bypassPermissions en %s", e.N(n, "1 proyecto", "%d proyectos"))
 	}
 	a.Mode = mode
-	a.Sandbox = "desactivada"
+	everywhere := false
 	for _, p := range sandboxIn {
-		if p == "" {
-			a.Sandbox = "activada"
-		}
+		everywhere = everywhere || p == ""
 	}
-	if a.Sandbox != "activada" && len(sandboxIn) > 0 {
-		a.Sandbox = "activada solo en " + strings.Join(unique(sandboxIn), ", ")
+	switch {
+	case everywhere:
+		a.Sandbox = e.T("activada")
+	case len(sandboxIn) > 0:
+		a.Sandbox = e.T("activada solo en %s", strings.Join(unique(sandboxIn), ", "))
+	default:
+		a.Sandbox = e.T("desactivada")
 	}
 
 	// Instruction files, skills and subagents.
@@ -224,7 +226,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 	agents := e.scanTree(a, filepath.Join(dir, "agents"), md, 200)
 	plugins := e.scanTree(a, filepath.Join(dir, "plugins"), md, 600)
 	if skills+agents+plugins > 0 {
-		a.Extras = append(a.Extras, fmt.Sprintf("%d ficheros de skills, subagentes y plugins revisados", skills+agents+plugins))
+		a.Extras = append(a.Extras, e.T("%d ficheros de skills, subagentes y plugins revisados", skills+agents+plugins))
 	}
 
 	// Which MCP servers run without asking, in the scope where they live.
@@ -243,7 +245,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 
 	// Capabilities granted by the configuration, per project.
 	for p := range bypassIn {
-		a.Grants = append(a.Grants, model.Grant{Cap: model.Out, Kind: "mode", Reason: "modo bypassPermissions", Project: p})
+		a.Grants = append(a.Grants, model.Grant{Cap: model.Out, Kind: "mode", Reason: e.T("modo bypassPermissions"), Project: p})
 	}
 	seen := map[string]bool{}
 	for _, p := range a.Perms {
@@ -254,23 +256,23 @@ func detectClaudeCode(e *Env) *model.Agent {
 		switch {
 		case shellWildcard(p.Rule):
 			a.Grants = append(a.Grants, model.Grant{Cap: model.Out, Kind: "bash", Reason: p.Rule, Project: p.Project})
-			a.Flag("AGT-002", "shell completa permitida sin preguntar: "+p.Rule,
-				"Quita \""+p.Rule+"\" de allow y permite solo los comandos concretos que necesites.", p.Ref)
+			a.Flag("AGT-002", e.T("shell completa permitida sin preguntar: %s", p.Rule),
+				e.T("Quita \"%s\" de allow y permite solo los comandos concretos que necesites.", p.Rule), p.Ref)
 		case arbitraryCode(p.Rule):
 			a.Grants = append(a.Grants, model.Grant{Cap: model.Out, Kind: "bash", Reason: clip(p.Rule, 60), Project: p.Project})
-			a.Flag("AGT-002", "puede ejecutar cualquier código sin preguntar: "+clip(p.Rule, 90),
-				"Sustituye \""+clip(p.Rule, 60)+"\" por los comandos concretos que necesites, o muévela a ask.", p.Ref)
+			a.Flag("AGT-002", e.T("puede ejecutar cualquier código sin preguntar: %s", clip(p.Rule, 90)),
+				e.T("Sustituye \"%s\" por los comandos concretos que necesites, o muévela a ask.", clip(p.Rule, 60)), p.Ref)
 		case readsEverything(p.Rule, e.Home):
-			a.Grants = append(a.Grants, model.Grant{Cap: model.Priv, Kind: "read", Reason: "todo tu HOME (" + p.Rule + ")", Project: p.Project})
-			detail := "lee sin preguntar: " + p.Rule
+			a.Grants = append(a.Grants, model.Grant{Cap: model.Priv, Kind: "read", Reason: e.T("todo tu HOME (%s)", p.Rule), Project: p.Project})
+			detail := e.T("lee sin preguntar: %s", p.Rule)
 			var sev model.Severity
 			if ref, ok := denies(a, p.Project, ".ssh"); ok {
 				sev = model.Med
-				detail += " (mitigado en parte: hay reglas deny para ~/.ssh)"
+				detail += e.T(" (mitigado en parte: hay reglas deny para ~/.ssh)")
 				a.Mitigations = append(a.Mitigations, model.Mitigation{Covers: "read-secrets", Project: p.Project, Ref: ref,
-					Detail: "reglas deny protegen ~/.ssh aunque se pueda leer el resto del HOME"})
+					Detail: e.T("reglas deny protegen ~/.ssh aunque se pueda leer el resto del HOME")})
 			}
-			a.Flag("SEC-001", detail, "Quita \""+p.Rule+"\" de allow y permite solo las carpetas de cada proyecto.", p.Ref)
+			a.Flag("SEC-001", detail, e.T("Quita \"%s\" de allow y permite solo las carpetas de cada proyecto.", p.Rule), p.Ref)
 			a.Signals[len(a.Signals)-1].Sev = sev
 		case networkWildcard(p.Rule):
 			kind := "bash"
@@ -278,14 +280,14 @@ func detectClaudeCode(e *Env) *model.Agent {
 				kind = "web"
 			}
 			a.Grants = append(a.Grants, model.Grant{Cap: model.Out, Kind: kind, Reason: redact.Text(p.Rule), Project: p.Project})
-			a.Flag("AGT-002", "salida de red sin preguntar: "+clip(p.Rule, 90),
-				"Mueve \""+clip(p.Rule, 60)+"\" de allow a ask para que pida confirmación.", p.Ref)
+			a.Flag("AGT-002", e.T("salida de red sin preguntar: %s", clip(p.Rule, 90)),
+				e.T("Mueve \"%s\" de allow a ask para que pida confirmación.", clip(p.Rule, 60)), p.Ref)
 		}
 	}
 	a.Base = model.Trifecta{
-		Priv: model.Yes, PrivWhy: []string{"ficheros del proyecto"},
-		Untr: model.Yes, UntrWhy: []string{"ficheros del repositorio", "WebFetch y WebSearch"},
-		Out: model.Partial, OutWhy: []string{"Bash y WebFetch piden confirmación"},
+		Priv: model.Yes, PrivWhy: []string{e.T("ficheros del proyecto")},
+		Untr: model.Yes, UntrWhy: []string{e.T("ficheros del repositorio"), e.T("WebFetch y WebSearch")},
+		Out: model.Partial, OutWhy: []string{e.T("Bash y WebFetch piden confirmación")},
 	}
 
 	// Say plainly when guard hooks exist but none of them covers the way out.
@@ -297,7 +299,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 		}
 	}
 	if bashHooks > 0 && !guarded {
-		a.Extras = append(a.Extras, fmt.Sprintf("%s antes de Bash, pero ninguno revisa comandos de red ni código arbitrario", plural(bashHooks, "hook se ejecuta", "hooks se ejecutan")))
+		a.Extras = append(a.Extras, e.T("%s antes de Bash, pero ninguno revisa comandos de red ni código arbitrario", e.N(bashHooks, "1 hook se ejecuta", "%d hooks se ejecutan")))
 	}
 
 	a.PIDs = e.running(func(p sysinfo.Proc) bool {
@@ -358,7 +360,7 @@ func hookGuard(e *Env, cmd string) string {
 		}
 	}
 	if hookBlockRe.MatchString(text) && hookNetRe.MatchString(text) {
-		return "revisa comandos de red antes de ejecutarlos"
+		return e.T("revisa comandos de red antes de ejecutarlos")
 	}
 	return ""
 }
@@ -382,13 +384,13 @@ func parseClaudeHooks(e *Env, a *model.Agent, d *doc, project string) {
 					if g := hookGuard(e, cmd); g != "" {
 						hk.Guards = g
 						a.Mitigations = append(a.Mitigations, model.Mitigation{Covers: "out-bash", Project: project, Ref: hk.Ref,
-							Detail: "el hook " + filepath.Base(first(hookTarget(e, cmd), strings.Fields(cmd)[0])) + " " + g})
+							Detail: e.T("el hook %s %s", filepath.Base(first(hookTarget(e, cmd), strings.Fields(cmd)[0])), g)})
 					}
 				}
 				if issue := hookIssue(e, cmd); issue != "" {
 					hk.Issue = issue
 					a.Flag("HK-001", event+" → "+hk.Command+" ("+issue+")",
-						"Mueve el script a una carpeta tuya (por ejemplo ~/.claude/hooks/) con permisos 700.", hk.Ref)
+						e.T("Mueve el script a una carpeta tuya (por ejemplo ~/.claude/hooks/) con permisos 700."), hk.Ref)
 				}
 				a.Hooks = append(a.Hooks, hk)
 			}
@@ -428,14 +430,14 @@ func hookIssue(e *Env, cmd string) string {
 	}
 	for _, tmp := range []string{"/tmp/", "/var/tmp/", "/dev/shm/"} {
 		if strings.HasPrefix(target, tmp) {
-			return "está en un directorio temporal compartido"
+			return e.T("está en un directorio temporal compartido")
 		}
 	}
 	if fi, err := os.Stat(target); err == nil && fi.Mode().Perm()&0o002 != 0 {
-		return "cualquier usuario puede modificarlo"
+		return e.T("cualquier usuario puede modificarlo")
 	}
 	if fi, err := os.Stat(filepath.Dir(target)); err == nil && fi.Mode().Perm()&0o002 != 0 && fi.Mode()&os.ModeSticky == 0 {
-		return "su carpeta es escribible por cualquier usuario"
+		return e.T("su carpeta es escribible por cualquier usuario")
 	}
 	return ""
 }

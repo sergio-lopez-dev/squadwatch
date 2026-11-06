@@ -82,6 +82,23 @@ make install      # compila y copia el binario a ~/.local/bin
 Es un único binario sin dependencias en tiempo de ejecución. El dashboard va
 embebido dentro.
 
+## Idioma
+
+Squadwatch está en español y en inglés: la CLI, los textos de los hallazgos,
+el informe en Markdown y el dashboard.
+
+- **CLI:** `-lang en` o `-lang es` en cualquier comando. Sin esa opción usa
+  `SQUADWATCH_LANG` y, si no está, el idioma del sistema (`LANG`). Por
+  defecto, inglés.
+- **Dashboard:** botón EN/ES arriba a la derecha. Recuerda la elección y
+  también acepta `?lang=en` en la URL.
+
+![Dashboard en inglés](docs/img/resumen-en.webp)
+
+Las traducciones viven en
+[`internal/i18n/messages_en.go`](internal/i18n/messages_en.go). Un test
+recorre el código y falla si algún mensaje no tiene traducción.
+
 ## Primeros pasos
 
 ```sh
@@ -145,6 +162,7 @@ $ squadwatch findings TRI-001
 Opciones comunes:
 
 - `-json` en casi todos los comandos.
+- `-lang en|es` para el idioma.
 - `-home <dir>` para auditar otro directorio home.
 - `--fail-on high` en `scan` y `findings`: sale con código 1 si hay
   hallazgos de esa severidad o peor. Útil en scripts.
@@ -315,6 +333,7 @@ internal/mcpcat/      catálogo de capacidades de servidores MCP
 internal/rules/       reglas y textos de los hallazgos
 internal/risk/        trifecta por proyecto, mitigaciones, caminos de ataque y puntuación
 internal/redact/      enmascarado de secretos
+internal/i18n/        traducciones (español → inglés)
 internal/store/       historial de escaneos
 internal/diff/        comparación entre escaneos
 internal/report/      salida de terminal y Markdown

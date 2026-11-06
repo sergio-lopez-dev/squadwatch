@@ -2,10 +2,11 @@
 package diff
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/sergio-lopez-dev/squadwatch/internal/i18n"
 	"github.com/sergio-lopez-dev/squadwatch/internal/model"
+	"github.com/sergio-lopez-dev/squadwatch/internal/rules"
 )
 
 // Change is one difference between two scans.
@@ -18,18 +19,24 @@ type Change struct {
 }
 
 // Compare lists what changed from old to cur.
-func Compare(old, cur *model.Scan) []Change {
+func Compare(old, cur *model.Scan, lang i18n.Lang) []Change {
+	title := func(f model.Finding) string {
+		if r, ok := rules.Lookup(f.ID); ok {
+			return lang.T(r.Title)
+		}
+		return f.Title
+	}
 	var out []Change
 	oldA := index(old)
 	curA := index(cur)
 	for id, a := range curA {
 		if _, ok := oldA[id]; !ok {
-			out = append(out, Change{Kind: "add", Area: "agente", Agent: id, Text: "Nuevo agente: " + a.Name})
+			out = append(out, Change{Kind: "add", Area: "agente", Agent: id, Text: lang.T("Nuevo agente: %s", a.Name)})
 		}
 	}
 	for id, a := range oldA {
 		if _, ok := curA[id]; !ok {
-			out = append(out, Change{Kind: "del", Area: "agente", Agent: id, Text: "Ya no está: " + a.Name})
+			out = append(out, Change{Kind: "del", Area: "agente", Agent: id, Text: lang.T("Ya no está: %s", a.Name)})
 		}
 	}
 	for id, a := range curA {
@@ -42,30 +49,30 @@ func Compare(old, cur *model.Scan) []Change {
 			o, ok := om[k]
 			switch {
 			case !ok:
-				out = append(out, Change{Kind: "add", Area: "mcp", Agent: id, Text: fmt.Sprintf("%s: nuevo servidor MCP %s (%s)", a.Name, s.Name, s.Scope)})
+				out = append(out, Change{Kind: "add", Area: "mcp", Agent: id, Text: lang.T("%s: nuevo servidor MCP %s (%s)", a.Name, s.Name, s.Scope)})
 			case cmdline(o) != cmdline(s):
-				out = append(out, Change{Kind: "mod", Area: "mcp", Agent: id, Text: fmt.Sprintf("%s: %s cambió de «%s» a «%s»", a.Name, s.Name, cmdline(o), cmdline(s))})
+				out = append(out, Change{Kind: "mod", Area: "mcp", Agent: id, Text: lang.T("%s: %s cambió de «%s» a «%s»", a.Name, s.Name, cmdline(o), cmdline(s))})
 			}
 		}
 		cm := servers(a)
 		for k, s := range om {
 			if _, ok := cm[k]; !ok {
-				out = append(out, Change{Kind: "del", Area: "mcp", Agent: id, Text: fmt.Sprintf("%s: se quitó el servidor MCP %s", a.Name, s.Name)})
+				out = append(out, Change{Kind: "del", Area: "mcp", Agent: id, Text: lang.T("%s: se quitó el servidor MCP %s", a.Name, s.Name)})
 			}
 		}
 		if a.Mode != b.Mode {
-			out = append(out, Change{Kind: "mod", Area: "permiso", Agent: id, Text: fmt.Sprintf("%s: modo «%s» → «%s»", a.Name, b.Mode, a.Mode)})
+			out = append(out, Change{Kind: "mod", Area: "permiso", Agent: id, Text: lang.T("%s: modo «%s» → «%s»", a.Name, b.Mode, a.Mode)})
 		}
 		op := perms(b)
 		for k := range perms(a) {
 			if !op[k] {
-				out = append(out, Change{Kind: "add", Area: "permiso", Agent: id, Text: fmt.Sprintf("%s: nueva regla %s", a.Name, k)})
+				out = append(out, Change{Kind: "add", Area: "permiso", Agent: id, Text: lang.T("%s: nueva regla %s", a.Name, k)})
 			}
 		}
 		if a.Trifecta.Complete != b.Trifecta.Complete {
-			t := "ya no cumple la trifecta"
+			t := lang.T("ya no cumple la trifecta")
 			if a.Trifecta.Complete {
-				t = "ahora cumple la trifecta"
+				t = lang.T("ahora cumple la trifecta")
 			}
 			out = append(out, Change{Kind: "mod", Area: "riesgo", Agent: id, Text: a.Name + ": " + t, Sev: model.Crit})
 		}
@@ -78,16 +85,16 @@ func Compare(old, cur *model.Scan) []Change {
 	for _, f := range cur.Findings {
 		curF[f.Key] = true
 		if _, ok := oldF[f.Key]; !ok {
-			out = append(out, Change{Kind: "add", Area: "hallazgo", Agent: f.Agent, Sev: f.Sev, Text: f.ID + " " + f.Title})
+			out = append(out, Change{Kind: "add", Area: "hallazgo", Agent: f.Agent, Sev: f.Sev, Text: f.ID + " " + title(f)})
 		}
 	}
 	for k, f := range oldF {
 		if !curF[k] {
-			out = append(out, Change{Kind: "del", Area: "hallazgo", Agent: f.Agent, Sev: f.Sev, Text: f.ID + " resuelto: " + f.Title})
+			out = append(out, Change{Kind: "del", Area: "hallazgo", Agent: f.Agent, Sev: f.Sev, Text: lang.T("%s resuelto: %s", f.ID, title(f))})
 		}
 	}
 	if old.Risk != cur.Risk {
-		out = append(out, Change{Kind: "mod", Area: "riesgo", Text: fmt.Sprintf("Riesgo del equipo %d → %d", old.Risk, cur.Risk)})
+		out = append(out, Change{Kind: "mod", Area: "riesgo", Text: lang.T("Riesgo del equipo %d → %d", old.Risk, cur.Risk)})
 	}
 	return out
 }

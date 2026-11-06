@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sergio-lopez-dev/squadwatch/internal/i18n"
 	"github.com/sergio-lopez-dev/squadwatch/internal/model"
 )
 
@@ -15,7 +16,7 @@ import (
 //
 // Sending data out only counts as "yes" when it happens without
 // confirmation and no mitigation (a guard hook, a sandbox) covers it.
-func Trifecta(a *model.Agent) {
+func Trifecta(a *model.Agent, lang i18n.Lang) {
 	if a.ModelHost {
 		a.Trifecta = model.Trifecta{Priv: model.No, Untr: model.No, Out: model.No}
 		a.Scopes = nil
@@ -23,7 +24,7 @@ func Trifecta(a *model.Agent) {
 	}
 	var all []model.ScopeTrifecta
 	for _, sc := range projects(a) {
-		t := compute(a, sc)
+		t := compute(a, sc, lang)
 		t.Scope = sc
 		all = append(all, model.ScopeTrifecta{Project: sc, Trifecta: t})
 	}
@@ -70,7 +71,7 @@ func projects(a *model.Agent) []string {
 	return out
 }
 
-func compute(a *model.Agent, scope string) model.Trifecta {
+func compute(a *model.Agent, scope string, lang i18n.Lang) model.Trifecta {
 	t := a.Base
 	applies := func(p string) bool { return p == "" || p == scope }
 	for _, s := range []*model.State{&t.Priv, &t.Untr, &t.Out} {
@@ -102,7 +103,7 @@ func compute(a *model.Agent, scope string) model.Trifecta {
 			untrWhy = append(untrWhy, g.Reason)
 		case model.Out:
 			if m, ok := mitigated(a, g, scope); ok {
-				partOut = append(partOut, g.Reason+" (mitigado: "+m+")")
+				partOut = append(partOut, g.Reason+lang.T(" (mitigado: %s)", m))
 			} else {
 				yesOut = append(yesOut, g.Reason)
 			}
@@ -123,9 +124,9 @@ func compute(a *model.Agent, scope string) model.Trifecta {
 				untrWhy = append(untrWhy, label)
 			case model.Out:
 				if s.AutoApproved {
-					yesOut = append(yesOut, label+" (sin confirmación)")
+					yesOut = append(yesOut, label+lang.T(" (sin confirmación)"))
 				} else {
-					partOut = append(partOut, label+" (con confirmación)")
+					partOut = append(partOut, label+lang.T(" (con confirmación)"))
 				}
 			}
 		}
@@ -248,7 +249,7 @@ func Curve(points float64) int {
 
 // Paths lists attack paths. An agent gets one path per project where its
 // trifecta is complete; otherwise one path for its worst project.
-func Paths(agents []model.Agent) []model.Path {
+func Paths(agents []model.Agent, lang i18n.Lang) []model.Path {
 	var out []model.Path
 	for _, a := range agents {
 		if a.ModelHost {
@@ -272,8 +273,8 @@ func Paths(agents []model.Agent) []model.Path {
 			if t.Priv != model.Yes || t.Untr != model.Yes {
 				continue
 			}
-			src := specific(t.UntrWhy, "contenido no fiable")
-			p := model.Path{Agent: a.ID, Scope: st.Project, Source: src, Data: firstOther(t.PrivWhy, src), Sink: firstOr(t.OutWhy, "sin salida")}
+			src := specific(t.UntrWhy, lang.T("contenido no fiable"))
+			p := model.Path{Agent: a.ID, Scope: st.Project, Source: src, Data: firstOther(t.PrivWhy, src, lang.T("datos privados")), Sink: firstOr(t.OutWhy, lang.T("sin salida"))}
 			switch t.Out {
 			case model.Yes:
 				p.State = "open"
@@ -309,13 +310,13 @@ func specific(xs []string, def string) string {
 }
 
 // firstOther returns the first item that is not the given one.
-func firstOther(xs []string, not string) string {
+func firstOther(xs []string, not, def string) string {
 	for _, x := range xs {
 		if x != not {
 			return x
 		}
 	}
-	return firstOr(xs, "datos privados")
+	return firstOr(xs, def)
 }
 
 func firstOr(xs []string, def string) string {

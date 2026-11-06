@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sergio-lopez-dev/squadwatch/internal/i18n"
 	"github.com/sergio-lopez-dev/squadwatch/internal/jsonc"
 	"github.com/sergio-lopez-dev/squadwatch/internal/model"
 	"github.com/sergio-lopez-dev/squadwatch/internal/sysinfo"
@@ -29,6 +30,8 @@ type Env struct {
 	Procs     []sysinfo.Proc
 	Listeners []sysinfo.Listener
 	LookPath  func(string) (string, error)
+	// Lang is the language of every text the detectors write.
+	Lang i18n.Lang
 	// NoSystem limits detection to files under Home. Tests use it so the
 	// real machine does not leak into a fake home.
 	NoSystem bool
@@ -48,9 +51,16 @@ func NewEnv(home string) *Env {
 		Procs:     sysinfo.Processes(),
 		Listeners: sysinfo.Listeners(),
 		LookPath:  exec.LookPath,
+		Lang:      i18n.FromEnv(),
 		read:      map[string]bool{},
 	}
 }
+
+// T translates a message into the scan's language.
+func (e *Env) T(msg string, args ...any) string { return e.Lang.T(msg, args...) }
+
+// N picks the singular or plural message in the scan's language.
+func (e *Env) N(n int, one, many string) string { return e.Lang.N(n, one, many) }
 
 // ConfigsRead is how many files the detectors opened.
 func (e *Env) ConfigsRead() int { return len(e.read) }

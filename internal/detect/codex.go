@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -20,7 +19,7 @@ func detectCodex(e *Env) *model.Agent {
 	if !exists(dir) && bin == "" {
 		return nil
 	}
-	a := &model.Agent{ID: "codex", Name: "Codex CLI", Kind: "CLI de código", Binary: e.short(bin), Version: npmVersionFromBin(bin)}
+	a := &model.Agent{ID: "codex", Name: "Codex CLI", Kind: e.T("CLI de código"), Binary: e.short(bin), Version: npmVersionFromBin(bin)}
 
 	cfg := filepath.Join(dir, "config.toml")
 	d := &doc{Path: cfg, Short: e.short(cfg), Data: map[string]any{}}
@@ -29,15 +28,15 @@ func detectCodex(e *Env) *model.Agent {
 		d.Raw = raw
 		a.Configs = append(a.Configs, d.Short)
 		if _, err := toml.Decode(string(raw), &d.Data); err != nil {
-			a.Extras = append(a.Extras, "No se pudo leer "+d.Short+": "+err.Error())
+			a.Extras = append(a.Extras, e.T("No se pudo leer %s: %s", d.Short, err.Error()))
 		}
 	}
 
 	approval := getStr(d.Data, "approval_policy")
 	sandbox := getStr(d.Data, "sandbox_mode")
 	network := getBool(getMap(d.Data, "sandbox_workspace_write"), "network_access")
-	a.Mode = "approval_policy = " + first(approval, "on-request (por defecto)")
-	a.Sandbox = first(sandbox, "read-only (por defecto)")
+	a.Mode = "approval_policy = " + first(approval, e.T("on-request (por defecto)"))
+	a.Sandbox = first(sandbox, e.T("read-only (por defecto)"))
 	if approval != "" {
 		a.Settings = append(a.Settings, model.Setting{Key: "approval_policy", Value: approval, Ref: d.ref("approval_policy")})
 	}
@@ -47,14 +46,14 @@ func detectCodex(e *Env) *model.Agent {
 	if network {
 		a.Settings = append(a.Settings, model.Setting{Key: "sandbox_workspace_write.network_access", Value: "true", Ref: d.ref("network_access")})
 	}
-	checkCodexPolicy(a, d, approval, sandbox, "")
+	checkCodexPolicy(e, a, d, approval, sandbox, "")
 	profiles := getMap(d.Data, "profiles")
 	for _, name := range sortedKeys(profiles) {
 		pm := getMap(profiles, name)
-		checkCodexPolicy(a, d, getStr(pm, "approval_policy"), getStr(pm, "sandbox_mode"), name)
+		checkCodexPolicy(e, a, d, getStr(pm, "approval_policy"), getStr(pm, "sandbox_mode"), name)
 	}
 
-	a.MCP = parseServers(getMap(d.Data, "mcp_servers"), d, "usuario")
+	a.MCP = e.parseServers(getMap(d.Data, "mcp_servers"), d, e.T("usuario"))
 	if approval == "never" {
 		for i := range a.MCP {
 			a.MCP[i].AutoApproved = true
@@ -71,27 +70,27 @@ func detectCodex(e *Env) *model.Agent {
 		}
 	}
 	if trusted > 0 {
-		a.Extras = append(a.Extras, plural(trusted, "proyecto marcado", "proyectos marcados")+" como de confianza")
+		a.Extras = append(a.Extras, e.N(trusted, "1 proyecto marcado como de confianza", "%d proyectos marcados como de confianza"))
 	}
 
 	web := getBool(getMap(d.Data, "tools"), "web_search") || getStr(d.Data, "web_search") == "live"
 	a.Base = model.Trifecta{
-		Priv: model.Yes, PrivWhy: []string{"ficheros del workspace"},
-		Untr: model.Yes, UntrWhy: []string{"ficheros del repositorio (AGENTS.md, código)"},
+		Priv: model.Yes, PrivWhy: []string{e.T("ficheros del workspace")},
+		Untr: model.Yes, UntrWhy: []string{e.T("ficheros del repositorio (AGENTS.md, código)")},
 	}
 	if web {
-		a.Base.UntrWhy = append(a.Base.UntrWhy, "búsqueda web")
+		a.Base.UntrWhy = append(a.Base.UntrWhy, e.T("búsqueda web"))
 	}
 	open := sandbox == "danger-full-access" || network
 	switch {
 	case open && approval == "never":
-		a.Base.Out, a.Base.OutWhy = model.Yes, []string{"red disponible sin aprobación"}
+		a.Base.Out, a.Base.OutWhy = model.Yes, []string{e.T("red disponible sin aprobación")}
 	case open:
-		a.Base.Out, a.Base.OutWhy = model.Partial, []string{"red disponible, pide aprobación"}
+		a.Base.Out, a.Base.OutWhy = model.Partial, []string{e.T("red disponible, pide aprobación")}
 	case approval == "never":
-		a.Base.Out, a.Base.OutWhy = model.No, []string{"sandbox sin red"}
+		a.Base.Out, a.Base.OutWhy = model.No, []string{e.T("sandbox sin red")}
 	default:
-		a.Base.Out, a.Base.OutWhy = model.Partial, []string{"pide permiso para salir de la sandbox"}
+		a.Base.Out, a.Base.OutWhy = model.Partial, []string{e.T("pide permiso para salir de la sandbox")}
 	}
 
 	a.PIDs = e.running(func(p sysinfo.Proc) bool {
@@ -102,21 +101,21 @@ func detectCodex(e *Env) *model.Agent {
 	return a
 }
 
-func checkCodexPolicy(a *model.Agent, d *doc, approval, sandbox, profile string) {
+func checkCodexPolicy(e *Env, a *model.Agent, d *doc, approval, sandbox, profile string) {
 	where := ""
 	if profile != "" {
-		where = " (perfil " + profile + ")"
+		where = e.T(" (perfil %s)", profile)
 	}
 	switch {
 	case approval == "never" && sandbox == "danger-full-access":
-		a.Flag("AGT-001", "approval_policy = \"never\" y sandbox_mode = \"danger-full-access\""+where,
-			"Usa approval_policy = \"on-request\" y sandbox_mode = \"workspace-write\".", d.ref("danger-full-access"))
+		a.Flag("AGT-001", e.T("approval_policy = \"never\" y sandbox_mode = \"danger-full-access\"%s", where),
+			e.T("Usa approval_policy = \"on-request\" y sandbox_mode = \"workspace-write\"."), d.ref("danger-full-access"))
 	case sandbox == "danger-full-access":
 		a.Flag("AGT-004", "sandbox_mode = \"danger-full-access\""+where,
-			"Usa sandbox_mode = \"workspace-write\".", d.ref("danger-full-access"))
+			e.T("Usa sandbox_mode = \"workspace-write\"."), d.ref("danger-full-access"))
 	case approval == "never":
 		a.Flag("AGT-003", "approval_policy = \"never\""+where,
-			"Usa approval_policy = \"on-request\", al menos en repositorios que no son tuyos.", d.ref("approval_policy"))
+			e.T("Usa approval_policy = \"on-request\", al menos en repositorios que no son tuyos."), d.ref("approval_policy"))
 	}
 }
 
@@ -143,11 +142,4 @@ func npmVersionFromBin(bin string) string {
 		dir = filepath.Dir(dir)
 	}
 	return versionRe.FindString(target)
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return "1 " + one
-	}
-	return strconv.Itoa(n) + " " + many
 }

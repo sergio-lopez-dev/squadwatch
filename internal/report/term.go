@@ -10,8 +10,15 @@ import (
 	"unicode/utf8"
 
 	"github.com/sergio-lopez-dev/squadwatch/internal/diff"
+	"github.com/sergio-lopez-dev/squadwatch/internal/i18n"
 	"github.com/sergio-lopez-dev/squadwatch/internal/model"
 )
+
+// Lang is the language of everything this package prints.
+var Lang = i18n.FromEnv()
+
+// T translates a message into Lang.
+func T(msg string, args ...any) string { return Lang.T(msg, args...) }
 
 // Color decides whether to print ANSI colors.
 var Color = func() bool {
@@ -39,8 +46,10 @@ func Acc(s string) string  { return paint("36", s) }
 
 // Sev prints a severity as a colored label.
 func Sev(s model.Severity) string {
-	l := strings.ToUpper(s.Label())
-	l += strings.Repeat(" ", 7-utf8.RuneCountInString(l))
+	l := strings.ToUpper(T(s.Label()))
+	if pad := 8 - utf8.RuneCountInString(l); pad > 0 {
+		l += strings.Repeat(" ", pad)
+	}
 	switch s {
 	case model.Crit:
 		return paint("1;97;41", " "+l+" ")
@@ -69,13 +78,13 @@ func Risk(r int) string {
 func RiskWord(r int) string {
 	switch {
 	case r >= 70:
-		return "crítico"
+		return T("crítico")
 	case r >= 50:
-		return "alto"
+		return T("alto")
 	case r >= 30:
-		return "medio"
+		return T("medio")
 	}
-	return "bajo"
+	return T("bajo")
 }
 
 // Meter draws a 10-block bar.
@@ -151,10 +160,7 @@ func countLabel(fs []model.Finding) string {
 		if n == 0 {
 			continue
 		}
-		label := fmt.Sprintf("%d %s", n, strings.ToLower(sev.Label()))
-		if n > 1 {
-			label += "s"
-		}
+		label := countWord(sev, n)
 		switch sev {
 		case model.Crit:
 			label = Red(label)
@@ -166,7 +172,7 @@ func countLabel(fs []model.Finding) string {
 		parts = append(parts, label)
 	}
 	if len(parts) == 0 {
-		return Grn("sin hallazgos")
+		return Grn(T("sin hallazgos"))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -176,22 +182,22 @@ func status(a model.Agent) string {
 	case len(a.Listeners) > 0 && a.Listeners[0].Public:
 		return Ora("◆") + fmt.Sprintf(" %s:%d", a.Listeners[0].Addr, a.Listeners[0].Port)
 	case a.Running && len(a.PIDs) > 0:
-		return Grn("■") + fmt.Sprintf(" activo · pid %d", a.PIDs[0])
+		return Grn("■") + fmt.Sprintf(T(" activo · pid %d"), a.PIDs[0])
 	case a.Running:
-		return Grn("■") + " activo"
+		return Grn("■") + T(" activo")
 	}
-	return "instalado"
+	return T("instalado")
 }
 
 // Summary prints the result of `squadwatch scan`.
 func Summary(w io.Writer, s *model.Scan) {
-	fmt.Fprintf(w, "%s %s · escaneo estático %s\n", Bold("Squadwatch"), s.Version, Dim("(no se ha ejecutado código de terceros)"))
-	fmt.Fprintf(w, "%s %d agentes · %d servidores MCP · %d ficheros leídos · %d ms\n\n", Grn("✓"), len(s.Agents), s.MCPCount(), s.Configs, s.DurationMS)
+	fmt.Fprintf(w, T("%s %s · escaneo estático %s\n"), Bold("Squadwatch"), s.Version, Dim(T("(no se ha ejecutado código de terceros)")))
+	fmt.Fprintf(w, T("%s %d agentes · %d servidores MCP · %d ficheros leídos · %d ms\n\n"), Grn("✓"), len(s.Agents), s.MCPCount(), s.Configs, s.DurationMS)
 	if len(s.Agents) == 0 {
-		fmt.Fprintln(w, "No se ha encontrado ningún agente de IA.")
+		fmt.Fprintln(w, T("No se ha encontrado ningún agente de IA."))
 		return
 	}
-	rows := [][]string{{"agente", "estado", "riesgo", "", "mcp", "hallazgos"}}
+	rows := [][]string{{T("agente"), T("estado"), T("riesgo"), "", "mcp", T("hallazgos")}}
 	for _, a := range s.Agents {
 		mcp := "–"
 		if len(a.MCP) > 0 {
@@ -200,7 +206,7 @@ func Summary(w io.Writer, s *model.Scan) {
 		rows = append(rows, []string{Bold(a.Name), status(a), Risk(a.Risk), Meter(a.Risk), mcp, countLabel(s.FindingsFor(a.ID))})
 	}
 	Table(w, rows)
-	fmt.Fprintf(w, "\n Riesgo del equipo %s %s · %s\n\n", Bold(Risk(s.Risk)+"/100"), "("+RiskWord(s.Risk)+")", countLabel(s.Findings))
+	fmt.Fprintf(w, T("\n Riesgo del equipo %s %s · %s\n\n"), Bold(Risk(s.Risk)+"/100"), "("+RiskWord(s.Risk)+")", countLabel(s.Findings))
 	shown := 0
 	for _, f := range s.Findings {
 		if f.Sev.Rank() < model.High.Rank() || shown >= 8 {
@@ -210,9 +216,9 @@ func Summary(w io.Writer, s *model.Scan) {
 		shown++
 	}
 	if rest := len(s.Findings) - shown; rest > 0 {
-		fmt.Fprintf(w, " %s squadwatch findings\n", Dim(fmt.Sprintf("+ %d más →", rest)))
+		fmt.Fprintf(w, " %s squadwatch findings\n", Dim(fmt.Sprintf(T("+ %d más →"), rest)))
 	}
-	fmt.Fprintf(w, "\n%s squadwatch show <agente>   %s squadwatch serve\n", Dim("→"), Dim("→"))
+	fmt.Fprintf(w, T("\n%s squadwatch show <agente>   %s squadwatch serve\n"), Dim("→"), Dim("→"))
 }
 
 func agentName(s *model.Scan, id string) string {
@@ -224,7 +230,7 @@ func agentName(s *model.Scan, id string) string {
 
 // Agents prints `squadwatch agents`.
 func Agents(w io.Writer, s *model.Scan) {
-	rows := [][]string{{"id", "versión", "estado", "modo", "config"}}
+	rows := [][]string{{"id", T("versión"), T("estado"), T("modo"), "config"}}
 	for _, a := range s.Agents {
 		cfg := "–"
 		if len(a.Configs) > 0 {
@@ -247,9 +253,9 @@ func orDash(s string) string {
 
 func capList(cs []model.Cap) string {
 	if len(cs) == 0 {
-		return "desconocidas"
+		return T("desconocidas")
 	}
-	names := map[model.Cap]string{model.Priv: "privado", model.Untr: "no fiable", model.Out: "salida"}
+	names := map[model.Cap]string{model.Priv: T("privado"), model.Untr: T("no fiable"), model.Out: T("salida")}
 	var p []string
 	for _, c := range cs {
 		p = append(p, names[c])
@@ -259,10 +265,10 @@ func capList(cs []model.Cap) string {
 
 // Show prints the detail of one agent.
 func Show(w io.Writer, s *model.Scan, a *model.Agent) {
-	fmt.Fprintf(w, "%s %s · %s · %s · riesgo %s\n\n", Bold(strings.ToUpper(a.Name)), orDash(a.Version), a.Kind, status(*a), Risk(a.Risk))
+	fmt.Fprintf(w, T("%s %s · %s · %s · riesgo %s\n\n"), Bold(strings.ToUpper(a.Name)), orDash(a.Version), a.Kind, status(*a), Risk(a.Risk))
 	sec := func(t string) { fmt.Fprintf(w, "%s\n", Acc(t)) }
-	sec("PERMISOS")
-	fmt.Fprintf(w, "  modo        %s\n", orDash(a.Mode))
+	sec(T("PERMISOS"))
+	fmt.Fprintf(w, T("  modo        %s\n"), orDash(a.Mode))
 	if a.Sandbox != "" {
 		fmt.Fprintf(w, "  sandbox     %s\n", a.Sandbox)
 	}
@@ -274,11 +280,11 @@ func Show(w io.Writer, s *model.Scan, a *model.Agent) {
 			}
 		}
 		if len(rs) > 0 {
-			label := map[string]string{"allow": "permitido", "ask": "pregunta", "deny": "denegado"}[kind]
-			fmt.Fprintf(w, "  %-11s %s\n", label, Dim(fmt.Sprintf("%d reglas", len(rs))))
+			label := map[string]string{"allow": T("permitido"), "ask": T("pregunta"), "deny": T("denegado")}[kind]
+			fmt.Fprintf(w, "  %-11s %s\n", label, Dim(fmt.Sprintf(T("%d reglas"), len(rs))))
 			for i, r := range rs {
 				if i == 12 {
-					fmt.Fprintf(w, "              %s\n", Dim(fmt.Sprintf("+ %d más (squadwatch show %s -json)", len(rs)-12, a.ID)))
+					fmt.Fprintf(w, "              %s\n", Dim(fmt.Sprintf(T("+ %d más (squadwatch show %s -json)"), len(rs)-12, a.ID)))
 					break
 				}
 				fmt.Fprintf(w, "              %s\n", clip(r, 100))
@@ -289,14 +295,14 @@ func Show(w io.Writer, s *model.Scan, a *model.Agent) {
 		fmt.Fprintf(w, "  %s = %s %s\n", st.Key, st.Value, Dim(loc(st.Ref)))
 	}
 	if len(a.MCP) > 0 {
-		sec("\nSERVIDORES MCP")
+		sec(T("\nSERVIDORES MCP"))
 		for _, m := range a.MCP {
 			extra := ""
 			if m.Disabled {
-				extra = Dim(" (desactivado)")
+				extra = Dim(T(" (desactivado)"))
 			}
 			if m.AutoApproved {
-				extra += Ora(" sin confirmación")
+				extra += Ora(T(" sin confirmación"))
 			}
 			fmt.Fprintf(w, "  %-16s %-6s %s %s%s\n", m.Name, m.Transport, Dim("["+capList(m.Caps)+"]"), Dim(m.Scope), extra)
 		}
@@ -315,27 +321,27 @@ func Show(w io.Writer, s *model.Scan, a *model.Agent) {
 		}
 	}
 	if len(a.Instr) > 0 {
-		sec("\nINSTRUCCIONES")
+		sec(T("\nINSTRUCCIONES"))
 		for _, f := range a.Instr {
-			st := Grn("limpio")
+			st := Grn(T("limpio"))
 			if f.Hidden > 0 {
-				st = Red(fmt.Sprintf("%d caracteres invisibles", f.Hidden))
+				st = Red(fmt.Sprintf(T("%d caracteres invisibles"), f.Hidden))
 			}
 			fmt.Fprintf(w, "  %s %s\n", f.Path, st)
 		}
 	}
 	if len(a.Listeners) > 0 {
-		sec("\nPUERTOS")
+		sec(T("\nPUERTOS"))
 		for _, l := range a.Listeners {
-			pub := Grn("solo local")
+			pub := Grn(T("solo local"))
 			if l.Public {
-				pub = Red("accesible desde la red")
+				pub = Red(T("accesible desde la red"))
 			}
 			fmt.Fprintf(w, "  %s:%d %s\n", l.Addr, l.Port, pub)
 		}
 	}
 	if len(a.Mitigations) > 0 {
-		sec("\nMITIGACIONES")
+		sec(T("\nMITIGACIONES"))
 		for _, m := range a.Mitigations {
 			where := ""
 			if m.Project != "" {
@@ -354,16 +360,16 @@ func Show(w io.Writer, s *model.Scan, a *model.Agent) {
 			title := "\nTRIFECTA"
 			switch {
 			case len(scopes) > 1 && st.Project == "":
-				title += " · fuera de proyectos con reglas propias"
+				title += T(" · fuera de proyectos con reglas propias")
 			case st.Project != "":
 				title += " · " + st.Project
 			}
 			sec(title)
-			fmt.Fprintf(w, "  %s datos privados      %s\n", State(t.Priv), Dim(clip(strings.Join(t.PrivWhy, ", "), 110)))
-			fmt.Fprintf(w, "  %s contenido no fiable %s\n", State(t.Untr), Dim(clip(strings.Join(t.UntrWhy, ", "), 110)))
-			fmt.Fprintf(w, "  %s salida              %s\n", State(t.Out), Dim(clip(strings.Join(t.OutWhy, ", "), 110)))
+			fmt.Fprintf(w, T("  %s datos privados      %s\n"), State(t.Priv), Dim(clip(strings.Join(t.PrivWhy, ", "), 110)))
+			fmt.Fprintf(w, T("  %s contenido no fiable %s\n"), State(t.Untr), Dim(clip(strings.Join(t.UntrWhy, ", "), 110)))
+			fmt.Fprintf(w, T("  %s salida              %s\n"), State(t.Out), Dim(clip(strings.Join(t.OutWhy, ", "), 110)))
 			if t.Complete {
-				fmt.Fprintf(w, "  %s\n", Red("→ CUMPLE la trifecta letal"))
+				fmt.Fprintf(w, "  %s\n", Red(T("→ CUMPLE la trifecta letal")))
 			}
 		}
 	}
@@ -380,7 +386,7 @@ func Show(w io.Writer, s *model.Scan, a *model.Agent) {
 			fmt.Fprintf(w, " %s %-8s %s\n", Sev(f.Sev), f.ID, f.Title)
 		}
 	}
-	fmt.Fprintf(w, "\n%s\n", Dim("Configuración leída: "+strings.Join(a.Configs, ", ")))
+	fmt.Fprintf(w, "\n%s\n", Dim(T("Configuración leída: ")+strings.Join(a.Configs, ", ")))
 }
 
 func clip(s string, n int) string {
@@ -403,7 +409,7 @@ func loc(r model.Ref) string {
 
 // MCP prints `squadwatch mcp`.
 func MCP(w io.Writer, s *model.Scan) {
-	rows := [][]string{{"servidor", "agente", "tipo", "versión", "credenciales", "aporta"}}
+	rows := [][]string{{T("servidor"), T("agente"), T("tipo"), T("versión"), T("credenciales"), T("aporta")}}
 	for _, a := range s.Agents {
 		for _, m := range a.MCP {
 			pin := m.Pin
@@ -412,7 +418,7 @@ func MCP(w io.Writer, s *model.Scan) {
 			}
 			cred := "–"
 			if len(m.Secrets) > 0 {
-				cred = Red("TEXTO PLANO")
+				cred = Red(T("TEXTO PLANO"))
 			} else if len(m.EnvKeys) > 0 {
 				cred = "env"
 			}
@@ -424,7 +430,7 @@ func MCP(w io.Writer, s *model.Scan) {
 		}
 	}
 	if len(rows) == 1 {
-		fmt.Fprintln(w, "No hay servidores MCP configurados.")
+		fmt.Fprintln(w, T("No hay servidores MCP configurados."))
 		return
 	}
 	Table(w, rows)
@@ -433,7 +439,7 @@ func MCP(w io.Writer, s *model.Scan) {
 // Findings prints the list of findings with their evidence.
 func Findings(w io.Writer, s *model.Scan, fs []model.Finding, detail bool) {
 	if len(fs) == 0 {
-		fmt.Fprintln(w, Grn("✓ Ningún hallazgo con estos filtros."))
+		fmt.Fprintln(w, Grn(T("✓ Ningún hallazgo con estos filtros.")))
 		return
 	}
 	for _, f := range fs {
@@ -444,32 +450,32 @@ func Findings(w io.Writer, s *model.Scan, fs []model.Finding, detail bool) {
 		for _, e := range f.Evidence {
 			fmt.Fprintf(w, "     %s %s\n", Dim(loc(model.Ref{File: e.File, Line: e.Line})), e.Text)
 		}
-		fmt.Fprintf(w, "     %s %s\n", Acc("Por qué:"), f.Why)
-		fmt.Fprintf(w, "     %s %s\n\n", Grn("Qué hacer:"), f.Fix)
+		fmt.Fprintf(w, "     %s %s\n", Acc(T("Por qué:")), f.Why)
+		fmt.Fprintf(w, "     %s %s\n\n", Grn(T("Qué hacer:")), f.Fix)
 	}
 }
 
 // Trifecta prints the matrix.
 func Trifecta(w io.Writer, s *model.Scan) {
-	rows := [][]string{{"agente", "datos priv.", "no fiable", "salida", "resultado"}}
+	rows := [][]string{{T("agente"), T("datos priv."), T("no fiable"), T("salida"), T("resultado")}}
 	for _, a := range s.Agents {
 		if a.ModelHost {
 			continue
 		}
 		t := a.Trifecta
-		res := countYes(t) + " de 3"
+		res := countYes(t) + T(" de 3")
 		if t.Complete {
-			res = Red("CUMPLE")
+			res = Red(T("CUMPLE"))
 		}
 		if n := completeScopes(a); n > 1 {
-			res += Dim(fmt.Sprintf(" en %d proyectos", n))
+			res += Dim(fmt.Sprintf(T(" en %d proyectos"), n))
 		} else if t.Scope != "" {
-			res += Dim(" en " + t.Scope)
+			res += Dim(T(" en ") + t.Scope)
 		}
 		rows = append(rows, []string{Bold(a.Name), State(t.Priv), State(t.Untr), State(t.Out), res})
 	}
 	Table(w, rows)
-	fmt.Fprintf(w, "\n%s\n", Dim("▲ sin confirmación   △ con confirmación   · no"))
+	fmt.Fprintf(w, "\n%s\n", Dim(T("▲ sin confirmación   △ con confirmación   · no")))
 }
 
 func countYes(t model.Trifecta) string {
@@ -485,15 +491,15 @@ func countYes(t model.Trifecta) string {
 // Paths prints attack paths.
 func Paths(w io.Writer, s *model.Scan) {
 	if len(s.Paths) == 0 {
-		fmt.Fprintln(w, Grn("✓ No hay caminos de ataque: ningún agente junta datos privados y contenido no fiable."))
+		fmt.Fprintln(w, Grn(T("✓ No hay caminos de ataque: ningún agente junta datos privados y contenido no fiable.")))
 		return
 	}
 	for _, p := range s.Paths {
-		state := map[string]string{"open": Red("ABIERTO"), "partial": Yel("PARCIAL"), "cut": Grn("CORTADO")}[p.State]
+		state := map[string]string{"open": Red(T("ABIERTO")), "partial": Yel(T("PARCIAL")), "cut": Grn(T("CORTADO"))}[p.State]
 		arrow := Dim(" → ")
 		who := Bold(agentName(s, p.Agent))
 		if p.Scope != "" {
-			who += Dim(" en " + p.Scope)
+			who += Dim(T(" en ") + p.Scope)
 		}
 		fmt.Fprintf(w, " %-9s %s  %s%s%s%s%s%s%s\n", state, p.ID, p.Source, arrow, who, arrow, p.Data, arrow, clip(p.Sink, 70))
 	}
@@ -501,14 +507,14 @@ func Paths(w io.Writer, s *model.Scan) {
 
 // Diff prints changes between two scans.
 func Diff(w io.Writer, old, cur *model.Scan, changes []diff.Change) {
-	fmt.Fprintf(w, "Comparando con el escaneo del %s %s\n\n", old.Time.Local().Format("02/01/2006 15:04"), Dim(fmt.Sprintf("(riesgo %d → %d)", old.Risk, cur.Risk)))
+	fmt.Fprintf(w, T("Comparando con el escaneo del %s %s\n\n"), old.Time.Local().Format("02/01/2006 15:04"), Dim(fmt.Sprintf(T("(riesgo %d → %d)"), old.Risk, cur.Risk)))
 	if len(changes) == 0 {
-		fmt.Fprintln(w, Grn("✓ Sin cambios."))
+		fmt.Fprintln(w, Grn(T("✓ Sin cambios.")))
 		return
 	}
 	for _, c := range changes {
 		mark := map[string]string{"add": Grn("+"), "del": Red("-"), "mod": Yel("~")}[c.Kind]
-		fmt.Fprintf(w, " %s %-9s %s\n", mark, Dim(c.Area), c.Text)
+		fmt.Fprintf(w, " %s %-9s %s\n", mark, Dim(T(c.Area)), c.Text)
 	}
 }
 
@@ -520,4 +526,17 @@ func completeScopes(a model.Agent) int {
 		}
 	}
 	return n
+}
+
+// countWord says "3 críticos" or "1 high" in the current language.
+func countWord(sev model.Severity, n int) string {
+	switch sev {
+	case model.Crit:
+		return Lang.N(n, "1 crítico", "%d críticos")
+	case model.High:
+		return Lang.N(n, "1 alto", "%d altos")
+	case model.Med:
+		return Lang.N(n, "1 medio", "%d medios")
+	}
+	return Lang.N(n, "1 bajo", "%d bajos")
 }

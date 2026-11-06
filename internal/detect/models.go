@@ -2,7 +2,6 @@ package detect
 
 import (
 	"bufio"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -39,7 +38,7 @@ func detectModelServer(e *Env, ms modelServer) *model.Agent {
 	if bin == "" && dir == "" && len(listeners) == 0 {
 		return nil
 	}
-	a := &model.Agent{ID: ms.id, Name: ms.name, Kind: "Modelos locales", Binary: e.short(bin), ModelHost: true, Mode: "API HTTP sin autenticación"}
+	a := &model.Agent{ID: ms.id, Name: ms.name, Kind: e.T("Modelos locales"), Binary: e.short(bin), ModelHost: true, Mode: e.T("API HTTP sin autenticación")}
 
 	// Where the listening address was configured, for evidence.
 	var confRef model.Ref
@@ -58,15 +57,15 @@ func detectModelServer(e *Env, ms modelServer) *model.Agent {
 		if l.Public() {
 			ref := confRef
 			if ref.File == "" {
-				ref = model.Ref{File: fmt.Sprintf("puerto %s:%d", l.IP, l.Port)}
+				ref = model.Ref{File: e.T("puerto %s:%d", l.IP, l.Port)}
 			}
-			a.Flag("NET-001", fmt.Sprintf("escucha en %s:%d, accesible desde la red", l.IP, l.Port),
-				fmt.Sprintf("Haz que escuche solo en 127.0.0.1 (%s=127.0.0.1) o pon delante un proxy con autenticación.", ms.envVar), ref)
+			a.Flag("NET-001", e.T("escucha en %s:%d, accesible desde la red", l.IP, l.Port),
+				e.T("Haz que escuche solo en 127.0.0.1 (%s=127.0.0.1) o pon delante un proxy con autenticación.", ms.envVar), ref)
 		}
 	}
 	if dir != "" {
 		if n := countFiles(filepath.Join(dir, "models", "manifests")); n > 0 {
-			a.Extras = append(a.Extras, plural(n, "modelo descargado", "modelos descargados"))
+			a.Extras = append(a.Extras, e.N(n, "1 modelo descargado", "%d modelos descargados"))
 		}
 	}
 	a.PIDs = e.running(func(p sysinfo.Proc) bool { return p.Base() == ms.binary })

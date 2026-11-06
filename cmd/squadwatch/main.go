@@ -13,6 +13,7 @@ import (
 
 	"github.com/sergio-lopez-dev/squadwatch/internal/detect"
 	"github.com/sergio-lopez-dev/squadwatch/internal/diff"
+	"github.com/sergio-lopez-dev/squadwatch/internal/i18n"
 	"github.com/sergio-lopez-dev/squadwatch/internal/model"
 	"github.com/sergio-lopez-dev/squadwatch/internal/report"
 	"github.com/sergio-lopez-dev/squadwatch/internal/scan"
@@ -20,7 +21,7 @@ import (
 	"github.com/sergio-lopez-dev/squadwatch/internal/store"
 )
 
-const usage = `Squadwatch %s · auditor de seguridad para agentes de IA
+const usageES = `Squadwatch %s · auditor de seguridad para agentes de IA
 
 Uso:
   squadwatch scan       Inventario y riesgos (guarda el escaneo para comparar)
@@ -37,15 +38,80 @@ Uso:
   squadwatch version
 
 Todo funciona sin red y sin ejecutar código de terceros. Los secretos se
-muestran siempre enmascarados. Añade -h a cualquier comando para ver sus opciones.
+muestran siempre enmascarados. Añade -h a cualquier comando para ver sus opciones;
+-lang en|es elige el idioma (por defecto, SQUADWATCH_LANG o el del sistema).
 `
 
+const usageEN = `Squadwatch %s · security auditor for AI agents
+
+Usage:
+  squadwatch scan       Inventory and risks (saves the scan for comparisons)
+  squadwatch agents     List the agents found
+  squadwatch show ID    Detail of one agent: permissions, MCP, hooks, trifecta
+  squadwatch mcp        MCP servers of every agent
+  squadwatch findings   Findings with their evidence and how to fix them
+  squadwatch trifecta   Which agents combine data, untrusted content and a way out
+  squadwatch paths      Attack paths
+  squadwatch diff       What changed since the last saved scan
+  squadwatch history    Risk over time
+  squadwatch serve      Dashboard at http://127.0.0.1:7777
+  squadwatch rules      Rules it checks
+  squadwatch version
+
+Everything works offline and without running third-party code. Secrets are
+always masked. Add -h to any command to see its options; -lang en|es picks
+the language (default: SQUADWATCH_LANG or the system locale).
+`
+
+// lang is the language of the whole run: -lang, else SQUADWATCH_LANG or the locale.
+var lang = i18n.FromEnv()
+
+// T translates a message into the run's language.
+func T(msg string, args ...any) string { return lang.T(msg, args...) }
+
+func usage() string {
+	if lang == i18n.ES {
+		return usageES
+	}
+	return usageEN
+}
+
+// langFromArgs reads -lang before the command's own flags are parsed, so
+// that every message, including flag errors, comes out in that language.
+func langFromArgs(args []string) {
+	for i, a := range args {
+		v := ""
+		switch {
+		case a == "-lang" || a == "--lang":
+			if i+1 < len(args) {
+				v = args[i+1]
+			}
+		case strings.HasPrefix(a, "-lang=") || strings.HasPrefix(a, "--lang="):
+			v = a[strings.Index(a, "=")+1:]
+		}
+		if l, ok := i18n.Parse(v); ok {
+			lang = l
+		}
+	}
+	report.Lang = lang
+}
+
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Printf(usage, scan.Version)
+	langFromArgs(os.Args[1:])
+	argv := os.Args[1:]
+	// A global -lang before the command ("squadwatch -lang en scan") is not a command.
+	for len(argv) > 0 && (strings.HasPrefix(argv[0], "-lang") || strings.HasPrefix(argv[0], "--lang")) {
+		if strings.Contains(argv[0], "=") || len(argv) == 1 {
+			argv = argv[1:]
+		} else {
+			argv = argv[2:]
+		}
+	}
+	if len(argv) == 0 {
+		fmt.Printf(usage(), scan.Version)
 		return
 	}
-	cmd, args := os.Args[1], os.Args[2:]
+	cmd, args := argv[0], argv[1:]
 	var err error
 	switch cmd {
 	case "scan":
@@ -73,10 +139,10 @@ func main() {
 	case "version", "-v", "--version":
 		fmt.Println("squadwatch", scan.Version)
 	case "help", "-h", "--help":
-		fmt.Printf(usage, scan.Version)
+		fmt.Printf(usage(), scan.Version)
 	default:
-		fmt.Fprintf(os.Stderr, "Comando desconocido: %s\n\n", cmd)
-		fmt.Fprintf(os.Stderr, usage, scan.Version)
+		fmt.Fprintf(os.Stderr, T("Comando desconocido: %s\n\n"), cmd)
+		fmt.Fprintf(os.Stderr, usage(), scan.Version)
 		os.Exit(2)
 	}
 	if err != nil {
@@ -102,15 +168,22 @@ type common struct {
 func newFlags(name string, c *common, withJSON bool) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	h, _ := os.UserHomeDir()
-	fs.StringVar(&c.home, "home", h, "directorio home que se audita")
+	fs.StringVar(&c.home, "home", h, T("directorio home que se audita"))
+	fs.String("lang", string(lang), T("idioma: en o es (por defecto, el del sistema)"))
 	if withJSON {
-		fs.BoolVar(&c.json, "json", false, "salida en JSON")
+		fs.BoolVar(&c.json, "json", false, T("salida en JSON"))
 	}
 	return fs
 }
 
 func run(c common) *model.Scan {
-	return scan.Run(detect.NewEnv(c.home))
+	return runIn(c, lang)
+}
+
+func runIn(c common, l i18n.Lang) *model.Scan {
+	e := detect.NewEnv(c.home)
+	e.Lang = l
+	return scan.Run(e)
 }
 
 func writeJSON(w io.Writer, v any) error {
@@ -123,16 +196,16 @@ func writeJSON(w io.Writer, v any) error {
 func cmdScan(args []string) error {
 	var c common
 	fs := newFlags("scan", &c, false)
-	format := fs.String("format", "table", "table, json o md")
-	out := fs.String("o", "", "escribe el informe en este fichero")
-	noSave := fs.Bool("no-save", false, "no guarda el escaneo en el historial")
-	failOn := fs.String("fail-on", "", "sale con código 1 si hay hallazgos de esta severidad o peor (crit, high, med)")
+	format := fs.String("format", "table", T("table, json o md"))
+	out := fs.String("o", "", T("escribe el informe en este fichero"))
+	noSave := fs.Bool("no-save", false, T("no guarda el escaneo en el historial"))
+	failOn := fs.String("fail-on", "", T("sale con código 1 si hay hallazgos de esta severidad o peor (crit, high, med)"))
 	_ = fs.Parse(args)
 
 	s := run(c)
 	if !*noSave {
 		if _, err := store.Save(s); err != nil {
-			fmt.Fprintln(os.Stderr, "Aviso: no se pudo guardar el escaneo:", err)
+			fmt.Fprintln(os.Stderr, T("Aviso: no se pudo guardar el escaneo:"), err)
 		}
 	}
 	w := io.Writer(os.Stdout)
@@ -156,7 +229,7 @@ func cmdScan(args []string) error {
 		report.Summary(w, s)
 	}
 	if *out != "" {
-		fmt.Printf("Informe guardado en %s\n", *out)
+		fmt.Printf(T("Informe guardado en %s\n"), *out)
 	}
 	return failIf(s, *failOn)
 }
@@ -167,7 +240,7 @@ func failIf(s *model.Scan, level string) error {
 	}
 	min, ok := model.ParseSeverity(level)
 	if !ok {
-		return fmt.Errorf("severidad desconocida: %s", level)
+		return fmt.Errorf(T("severidad desconocida: %s"), level)
 	}
 	for _, f := range s.Findings {
 		if f.Sev.Rank() >= min.Rank() {
@@ -193,7 +266,7 @@ func cmdShow(args []string) error {
 	fs := newFlags("show", &c, true)
 	_ = fs.Parse(reorder(args))
 	if fs.NArg() != 1 {
-		return errors.New("indica un agente: squadwatch show claude-code (los ids salen en squadwatch agents)")
+		return errors.New(T("indica un agente: squadwatch show claude-code (los ids salen en squadwatch agents)"))
 	}
 	s := run(c)
 	a := s.Agent(fs.Arg(0))
@@ -202,7 +275,7 @@ func cmdShow(args []string) error {
 		for _, x := range s.Agents {
 			ids = append(ids, x.ID)
 		}
-		return fmt.Errorf("no hay ningún agente %q. Detectados: %s", fs.Arg(0), strings.Join(ids, ", "))
+		return fmt.Errorf(T("no hay ningún agente %q. Detectados: %s"), fs.Arg(0), strings.Join(ids, ", "))
 	}
 	if c.json {
 		return writeJSON(os.Stdout, struct {
@@ -238,14 +311,14 @@ func cmdMCP(args []string) error {
 func cmdFindings(args []string) error {
 	var c common
 	fs := newFlags("findings", &c, true)
-	min := fs.String("min", "low", "severidad mínima: crit, high, med, low")
-	agent := fs.String("agent", "", "solo este agente")
-	short := fs.Bool("short", false, "sin evidencia ni explicación")
-	failOn := fs.String("fail-on", "", "sale con código 1 si hay hallazgos de esta severidad o peor")
+	min := fs.String("min", "low", T("severidad mínima: crit, high, med, low"))
+	agent := fs.String("agent", "", T("solo este agente"))
+	short := fs.Bool("short", false, T("sin evidencia ni explicación"))
+	failOn := fs.String("fail-on", "", T("sale con código 1 si hay hallazgos de esta severidad o peor"))
 	_ = fs.Parse(reorder(args))
 	sev, ok := model.ParseSeverity(*min)
 	if !ok {
-		return fmt.Errorf("severidad desconocida: %s", *min)
+		return fmt.Errorf(T("severidad desconocida: %s"), *min)
 	}
 	s := run(c)
 	var out []model.Finding
@@ -300,13 +373,13 @@ func cmdDiff(args []string) error {
 	_ = newFlags("diff", &c, true).Parse(args)
 	old, err := store.Latest()
 	if errors.Is(err, store.ErrNone) {
-		return errors.New("todavía no hay escaneos guardados: ejecuta squadwatch scan primero")
+		return errors.New(T("todavía no hay escaneos guardados: ejecuta squadwatch scan primero"))
 	}
 	if err != nil {
 		return err
 	}
 	cur := run(c)
-	changes := diff.Compare(old, cur)
+	changes := diff.Compare(old, cur, lang)
 	if c.json {
 		if changes == nil {
 			changes = []diff.Change{}
@@ -328,28 +401,28 @@ func cmdHistory(args []string) error {
 		return writeJSON(os.Stdout, h)
 	}
 	if len(h) == 0 {
-		fmt.Println("Todavía no hay escaneos guardados: ejecuta squadwatch scan.")
+		fmt.Println(T("Todavía no hay escaneos guardados: ejecuta squadwatch scan."))
 		return nil
 	}
-	rows := [][]string{{"fecha", "riesgo", "", "agentes", "hallazgos", "críticos"}}
+	rows := [][]string{{T("fecha"), T("riesgo"), "", T("agentes"), T("hallazgos"), T("críticos")}}
 	for _, p := range h {
 		rows = append(rows, []string{p.Time[:16], report.Risk(p.Risk), report.Meter(p.Risk), fmt.Sprint(p.Agents), fmt.Sprint(p.Findings), fmt.Sprint(p.Crit)})
 	}
 	report.Table(os.Stdout, rows)
-	fmt.Printf("\n%s\n", report.Dim("Guardados en "+store.Dir()))
+	fmt.Printf("\n%s\n", report.Dim(T("Guardados en %s", store.Dir())))
 	return nil
 }
 
 func cmdServe(args []string) error {
 	var c common
 	fs := newFlags("serve", &c, false)
-	addr := fs.String("addr", "127.0.0.1:7777", "dirección de escucha (solo se admite localhost)")
+	addr := fs.String("addr", "127.0.0.1:7777", T("dirección de escucha (solo se admite localhost)"))
 	_ = fs.Parse(args)
-	return server.Serve(*addr, func() *model.Scan { return run(c) })
+	return server.Serve(*addr, lang, func(l i18n.Lang) *model.Scan { return runIn(c, l) })
 }
 
 func cmdRules() {
-	rows := [][]string{{"id", "severidad", "regla"}}
+	rows := [][]string{{"id", T("severidad"), T("regla")}}
 	for _, r := range rulesCatalog() {
 		rows = append(rows, []string{r[0], r[1], r[2]})
 	}
@@ -359,7 +432,7 @@ func cmdRules() {
 // reorder moves flags in front of positional arguments so that
 // "show claude-code -json" works like "show -json claude-code".
 func reorder(args []string) []string {
-	withValue := map[string]bool{"agent": true, "min": true, "fail-on": true, "home": true, "format": true, "o": true, "addr": true}
+	withValue := map[string]bool{"lang": true, "agent": true, "min": true, "fail-on": true, "home": true, "format": true, "o": true, "addr": true}
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]

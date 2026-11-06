@@ -21,9 +21,9 @@ func Run(e *detect.Env) *model.Scan {
 	start := time.Now()
 	agents := detect.All(e)
 	for i := range agents {
-		risk.Trifecta(&agents[i])
+		risk.Trifecta(&agents[i], e.Lang)
 	}
-	findings := rules.Evaluate(agents, e.Home)
+	findings := rules.Evaluate(agents, e.Home, e.Lang)
 	team := risk.Score(agents, findings)
 	host, _ := os.Hostname()
 	if h := os.Getenv("SQUADWATCH_HOST"); h != "" { // for demos and screenshots
@@ -32,7 +32,7 @@ func Run(e *detect.Env) *model.Scan {
 	if findings == nil {
 		findings = []model.Finding{}
 	}
-	paths := risk.Paths(agents)
+	paths := risk.Paths(agents, e.Lang)
 	if paths == nil {
 		paths = []model.Path{}
 	}

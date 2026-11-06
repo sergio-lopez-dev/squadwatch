@@ -26,6 +26,9 @@ func Run(e *detect.Env) *model.Scan {
 	findings := rules.Evaluate(agents, e.Home)
 	team := risk.Score(agents, findings)
 	host, _ := os.Hostname()
+	if h := os.Getenv("SQUADWATCH_HOST"); h != "" { // for demos and screenshots
+		host = h
+	}
 	if findings == nil {
 		findings = []model.Finding{}
 	}

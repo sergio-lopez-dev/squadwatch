@@ -136,7 +136,7 @@ func detectClaudeCode(e *Env) *model.Agent {
 
 	mode := ""
 	bypassIn := map[string]bool{} // projects in bypass mode; "" means everywhere
-	sandbox := ""
+	var sandboxIn []string        // projects with the Bash sandbox on; "" means everywhere
 	for _, f := range files {
 		d, err := e.readJSON(f.path)
 		if d == nil {
@@ -181,11 +181,9 @@ func detectClaudeCode(e *Env) *model.Agent {
 		}
 		if sb := getMap(d.Data, "sandbox"); sb != nil {
 			if getBool(sb, "enabled") {
-				sandbox = "activada"
+				sandboxIn = append(sandboxIn, f.project)
 				a.Mitigations = append(a.Mitigations, model.Mitigation{Covers: "out-bash", Project: f.project, Ref: d.ref("sandbox"),
 					Detail: "sandbox de Bash activada (" + f.scope + "): limita la red y los ficheros de los comandos"})
-			} else if sandbox == "" {
-				sandbox = "desactivada"
 			}
 		}
 		parseClaudeHooks(e, a, d, f.project)
@@ -206,7 +204,15 @@ func detectClaudeCode(e *Env) *model.Agent {
 		mode += fmt.Sprintf(" · bypassPermissions en %s", plural(n, "proyecto", "proyectos"))
 	}
 	a.Mode = mode
-	a.Sandbox = first(sandbox, "desactivada")
+	a.Sandbox = "desactivada"
+	for _, p := range sandboxIn {
+		if p == "" {
+			a.Sandbox = "activada"
+		}
+	}
+	if a.Sandbox != "activada" && len(sandboxIn) > 0 {
+		a.Sandbox = "activada solo en " + strings.Join(unique(sandboxIn), ", ")
+	}
 
 	// Instruction files, skills and subagents.
 	e.addInstr(a, filepath.Join(dir, "CLAUDE.md"))

@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Squadwatch</title>
+<style>
+/* Carcasa redondeada sobre fondo menta → barra lateral de iconos + cabecera con KPIs → tarjetas blancas. Riesgo en degradado verde→rojo. Sin recursos externos. */
+:root{
+  --outer:#C3D8D5; --shell-a:#E2EFED; --shell-b:#F4F8F7; --shell-c:#D2E5E2;
+  --card:#FFFFFF; --card-2:#EEF3F2; --ink:#0E1414; --ink-2:#5B6867; --line:#E0E8E7;
+  --pill:#0E1414; --pill-ink:#FFFFFF; --grey-pill:#B4C3C1;
+  --g1:#45D86C; --g2:#B5DE45; --g3:#FFB13B; --g4:#FF7A2F; --g5:#EC3A2A;
+  --crit:#D8301F; --crit-bg:#FDE3DF; --high:#B5520A; --high-bg:#FFE8D3; --med:#735700; --med-bg:#FFF0C0; --ok:#1B7340; --ok-bg:#DAF5E3;
+  --f-body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:ui-monospace,"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --outer:#050A0A; --shell-a:#0F1B1A; --shell-b:#0A1312; --shell-c:#132322;
+  --card:#152120; --card-2:#1E2D2C; --ink:#EAF2F1; --ink-2:#9AACAA; --line:#253635;
+  --pill:#EAF2F1; --pill-ink:#0E1414; --grey-pill:#3B4D4B;
+  --crit:#FF6E5E; --crit-bg:#3D1C19; --high:#FFA25C; --high-bg:#3A2716; --med:#F0CF5A; --med-bg:#35301A; --ok:#62DC8E; --ok-bg:#15301F;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --outer:#050A0A; --shell-a:#0F1B1A; --shell-b:#0A1312; --shell-c:#132322;
+  --card:#152120; --card-2:#1E2D2C; --ink:#EAF2F1; --ink-2:#9AACAA; --line:#253635;
+  --pill:#EAF2F1; --pill-ink:#0E1414; --grey-pill:#3B4D4B;
+  --crit:#FF6E5E; --crit-bg:#3D1C19; --high:#FFA25C; --high-bg:#3A2716; --med:#F0CF5A; --med-bg:#35301A; --ok:#62DC8E; --ok-bg:#15301F;
+  color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--outer);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.page{max-width:1380px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px))}
+h1,h2,h3{margin:0}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+button,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2.5px solid var(--g4);outline-offset:2px}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.shell{display:grid;grid-template-columns:64px minmax(0,1fr);gap:22px;background:linear-gradient(140deg,var(--shell-a),var(--shell-b) 48%,var(--shell-c));border-radius:34px;padding:24px 26px 26px 16px;min-height:calc(100vh - 60px)}
+.side{display:flex;flex-direction:column;align-items:center;gap:12px;position:relative;z-index:10}
+.logo{width:44px;height:44px;display:grid;place-items:center;margin-bottom:50px}
+.nav{position:relative;width:44px;height:44px;border-radius:50%;border:0;background:var(--card);display:grid;place-items:center;transition:transform .15s}
+.nav:hover{transform:scale(1.06)}
+.nav[aria-current="page"]{background:var(--pill);color:var(--pill-ink)}
+.nav .tip{position:absolute;left:54px;top:50%;transform:translateY(-50%);background:var(--pill);color:var(--pill-ink);font-size:12px;font-weight:500;padding:5px 10px;border-radius:999px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:5}
+.nav:hover .tip,.nav:focus-visible .tip{opacity:1}
+.badge{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--g5);color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center;border:2px solid var(--shell-b)}
+.main{min-width:0;display:flex;flex-direction:column;gap:18px}
+.head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 28px;align-items:end}
+.head h1{font-size:36px;font-weight:700;letter-spacing:-.025em;line-height:1.1}
+.head p{margin:6px 0 0;color:var(--ink-2)}
+.head-r{display:flex;flex-direction:column;align-items:flex-end;gap:22px}
+.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.host{font:500 11.5px var(--f-mono);color:var(--ink-2);background:var(--card);padding:7px 12px;border-radius:999px;white-space:nowrap}
+.ibtn{width:40px;height:40px;border-radius:50%;border:0;background:var(--card);display:grid;place-items:center}
+.kpis{display:flex;gap:34px;flex-wrap:wrap;justify-content:flex-end}
+.kpi .l{font-size:13px;color:var(--ink-2);font-weight:500}
+.kpi .v{display:flex;align-items:center;gap:10px;margin-top:2px}
+.kpi .v b{font-size:27px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.opill{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);white-space:nowrap}
+.opill.hot{background:var(--crit-bg);color:var(--crit);border-color:transparent}
+.grid{display:grid;grid-template-columns:minmax(0,1.07fr) minmax(0,1fr);gap:16px}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--card);border-radius:28px;padding:20px 22px;display:flex;flex-direction:column;gap:14px;min-width:0;position:relative}
+.card.flush{overflow:hidden}
+.ch{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ch h3{font-size:15.5px;font-weight:600}
+.wpill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-size:12px;font-weight:500;white-space:nowrap}
+.wpill:hover{background:var(--card-2)}
+.bpill{display:inline-flex;align-items:center;gap:8px;background:var(--pill);color:var(--pill-ink);border:0;border-radius:999px;padding:9px 16px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.bpill[disabled]{opacity:.5;cursor:progress}
+.note{margin:0;color:var(--ink-2);font-size:13px}
+.vt{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+.vt h1{font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1.1}
+.vt p{margin:6px 0 0;color:var(--ink-2);font-size:14px;max-width:80ch}
+.link{border:0;background:none;padding:0;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:3px;align-self:flex-start}
+.empty{padding:28px;text-align:center;color:var(--ink-2)}
+.gauge-row{display:grid;grid-template-columns:minmax(180px,240px) minmax(0,1fr);gap:20px 32px;align-items:center}
+.gauge{position:relative}
+.gauge svg{width:100%;display:block}
+.gauge .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:6px;text-align:center}
+.gauge .c b{font-size:44px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.gauge .c b small{font-size:19px;font-weight:600;color:var(--ink-2)}
+.gauge .c span{font-size:12.5px;color:var(--ink-2);margin-top:4px}
+.leaders{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.leaders button{width:100%;display:flex;align-items:center;gap:10px;border:0;background:none;padding:2px 0;text-align:left;font-size:15px;font-weight:600}
+.leaders .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.leaders .fill{flex:1;border-bottom:1.5px dotted var(--grey-pill);transform:translateY(-4px);min-width:16px}
+.leaders small{font-size:12px;color:var(--ink-2);font-weight:500}
+.mets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mets .l{font-size:13px;color:var(--ink-2);font-weight:500}
+.mets b{display:block;font-size:22px;font-weight:600;letter-spacing:-.02em;margin-top:2px}
+.mets b small{font-size:14px;color:var(--ink-2);font-weight:500}
+.stream{margin:0 -22px -20px}
+.stream svg,.trend svg{display:block;width:100%}
+.stream text{font-size:13px;font-weight:600;fill:var(--ink);font-family:var(--f-body)}
+.stream .pl{fill:var(--card-2)}
+.stream .dl{stroke:var(--ink);stroke-width:1.2;stroke-dasharray:3 4}
+.trend text{font-family:var(--f-body);font-size:10.5px;fill:var(--ink-2)}
+.trend .end{font-size:16px;font-weight:700;fill:var(--ink)}
+.sp{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.sp::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.sp.crit{background:var(--crit-bg);color:var(--crit)}.sp.high{background:var(--high-bg);color:var(--high)}.sp.med{background:var(--med-bg);color:var(--med)}.sp.low,.sp.info{background:var(--card-2);color:var(--ink-2)}.sp.ok{background:var(--ok-bg);color:var(--ok)}
+.sps{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.rb{display:flex;align-items:center;gap:10px;min-width:150px}
+.rb-t{flex:1;height:10px;border-radius:999px;background:var(--card-2);overflow:hidden}
+.rb-t i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--g1),var(--g2) 30%,var(--g3) 55%,var(--g4) 75%,var(--g5))}
+.rb b{font-size:15px;font-weight:700;width:26px;text-align:right;font-variant-numeric:tabular-nums}
+.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:700;color:#0E1414;flex:none}
+.who{display:flex;align-items:center;gap:12px;min-width:0}
+.who b{display:block;font-weight:600}
+.who span{display:block;font-size:12px;color:var(--ink-2)}
+.who .av{display:grid;font-size:12.5px;color:#0E1414}
+.ahero .who .av{font-size:20px}
+.st{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--grey-pill)}
+.st.on::before{background:var(--g1);box-shadow:0 0 0 3px var(--ok-bg)}
+.st.net::before{background:var(--g4);box-shadow:0 0 0 3px var(--high-bg)}
+.cap{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;background:var(--card-2);color:var(--ink-2)}
+.cap.priv{background:var(--high-bg);color:var(--high)}.cap.untr{background:var(--med-bg);color:var(--med)}.cap.out{background:var(--crit-bg);color:var(--crit)}
+.warn{color:var(--crit);font-weight:600;font-size:12.5px}
+.fine{color:var(--ok);font-size:12.5px;font-weight:500}
+.tw{overflow-x:auto;margin:0 -8px}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px}
+th{font-size:12px;font-weight:500;color:var(--ink-2);text-align:left;padding:8px 12px;white-space:nowrap}
+td{padding:12px;border-top:1px solid var(--line);vertical-align:middle}
+td .sub{display:block;font-size:12px;color:var(--ink-2)}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--card-2)}
+.nw{white-space:nowrap}
+.seg{display:inline-flex;background:var(--card);border-radius:999px;padding:4px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--pill);color:var(--pill-ink)}
+.ahero{display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:20px;align-items:center}
+.ahero .who b{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.ahero .av{width:64px;height:64px;font-size:20px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.meta>span{font-size:12px;font-weight:500;padding:5px 11px;border-radius:999px;background:var(--card-2);max-width:100%;overflow-wrap:anywhere}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+@media (min-width:1100px){.dgrid .wide{grid-column:span 2}}
+dl.kv{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 16px;font-size:13.5px}
+dl.kv dt{color:var(--ink-2)}
+dl.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+ul.plain{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:13.5px}
+ul.plain li{display:flex;justify-content:space-between;gap:10px;align-items:center;min-width:0;flex-wrap:wrap}
+ul.plain li code{overflow-wrap:anywhere;min-width:0}
+.rows{display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:96px 72px minmax(0,1fr);gap:12px;align-items:center;border:0;background:var(--card-2);border-radius:16px;padding:11px 14px;text-align:left;min-height:46px}
+.row:hover{background:var(--line)}
+.row .id{font:500 11.5px var(--f-mono);color:var(--ink-2)}
+.trigrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.tri{border:0;text-align:left;background:var(--card);border-radius:28px;padding:16px 18px 18px;display:flex;flex-direction:column;gap:6px;transition:transform .15s}
+.tri:hover{transform:translateY(-2px)}
+.tri .th{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tri .th b{font-weight:600}
+.tri svg{width:100%;max-width:240px;margin:0 auto;display:block}
+.tri dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:3px 10px;font-size:12px}
+.tri dt{color:var(--ink-2)}.tri dd{margin:0;overflow-wrap:anywhere}
+.e-on{stroke:url(#edge);stroke-width:4;stroke-linecap:round}
+.e-half{stroke:var(--g3);stroke-width:2.2;stroke-dasharray:6 5;stroke-linecap:round}
+.e-off{stroke:var(--grey-pill);stroke-width:1.6;stroke-dasharray:1 5;stroke-linecap:round}
+.v-y{fill:var(--g5)}.v-p{fill:var(--card);stroke:var(--g3);stroke-width:3.5}.v-n{fill:var(--card);stroke:var(--grey-pill);stroke-width:2}
+.tri-lab{font-size:10px;font-weight:600;fill:var(--ink-2);font-family:var(--f-body)}
+.tri-sc{font-size:30px;font-weight:700;fill:var(--ink);font-family:var(--f-body)}
+.keys{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:12.5px;color:var(--ink-2);align-items:center}
+.keys svg{vertical-align:middle;margin-right:6px}
+.gwrap{overflow-x:auto;margin:0 -8px;padding:0 8px}
+.graph{display:block;width:100%;min-width:860px}
+.pg-head{font-size:11px;font-weight:600;fill:var(--ink-2);letter-spacing:.08em;font-family:var(--f-body)}
+.pg-node rect{fill:var(--card);stroke:var(--line);stroke-width:1.5}
+.pg-node text{font-size:12px;font-weight:500;fill:var(--ink);font-family:var(--f-body)}
+.pg-node.ag rect{fill:var(--card-2);stroke:var(--card-2)}
+.pg-node.ag text{font-weight:700}
+.pg-node.on rect{fill:var(--pill);stroke:var(--pill)}
+.pg-node.on text{fill:var(--pill-ink)}
+.pe{fill:none;stroke:var(--line);stroke-width:2}
+.pe.faint{stroke:var(--crit);opacity:.25}
+.pe.sel{stroke:url(#gSel);stroke-width:4;stroke-dasharray:10 7;animation:flow 1s linear infinite}
+.pe.half{stroke:var(--g3);stroke-width:3;stroke-dasharray:6 6}
+.pe.cut{stroke:var(--grey-pill);stroke-width:3;stroke-dasharray:2 6;stroke-linecap:round}
+@keyframes flow{to{stroke-dashoffset:-17}}
+.plist{display:flex;flex-direction:column;gap:8px}
+.pbtn{border:0;background:var(--card-2);border-radius:18px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:6px}
+.pbtn:hover{background:var(--line)}
+.pbtn .chain{font-size:12px;color:var(--ink-2);overflow-wrap:anywhere}
+.pbtn[aria-pressed="true"]{background:var(--pill);color:var(--pill-ink)}
+.pbtn[aria-pressed="true"] .chain{color:inherit;opacity:.75}
+ol.steps{list-style:none;margin:0;padding:0;counter-reset:s;display:flex;flex-direction:column;gap:12px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;font-size:14px}
+ol.steps li::before{content:counter(s);width:30px;height:30px;border-radius:50%;background:var(--pill);color:var(--pill-ink);display:grid;place-items:center;font-weight:700;font-size:13px}
+.cut{background:var(--ok-bg);border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.cut .k{font-size:12px;font-weight:600;color:var(--ok)}
+.flist{display:flex;flex-direction:column;gap:8px}
+details.f{background:var(--card-2);border-radius:20px}
+details.f[open]{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--line)}
+details.f summary{list-style:none;display:grid;grid-template-columns:96px 72px minmax(0,1fr) auto 28px;gap:12px;align-items:center;padding:11px 14px;cursor:pointer;min-height:48px}
+details.f summary::-webkit-details-marker{display:none}
+details.f summary::after{content:"+";width:28px;height:28px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-weight:600}
+details.f[open] summary::after{content:"−";background:var(--pill);color:var(--pill-ink)}
+details.f .id{font:500 11.5px var(--f-mono);color:var(--ink-2)}
+details.f .t{font-weight:600}
+details.f .ag{font-size:12px;color:var(--ink-2);white-space:nowrap}
+.fbody{padding:4px 16px 18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 24px}
+.fbody .full{grid-column:1/-1}
+.fbody p{margin:0;font-size:13.5px}
+.fbody .k{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:4px}
+.ev{background:var(--card-2);border-radius:14px;padding:10px 12px;font:400 12px/1.7 var(--f-mono);overflow-x:auto}
+.ev div{white-space:pre-wrap;overflow-wrap:anywhere}
+.ev .ln{color:var(--ink-2)}
+.refs{display:flex;flex-wrap:wrap;gap:6px}
+.refs span{font-size:11.5px;font-weight:500;padding:4px 10px;border-radius:999px;background:var(--card-2);color:var(--ink-2)}
+.tl{display:flex;flex-direction:column}
+.ti{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+.ti:first-child{border-top:0}
+.ti .mk{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px}
+.mk.add{background:var(--ok-bg);color:var(--ok)}.mk.del{background:var(--crit-bg);color:var(--crit)}.mk.mod{background:var(--med-bg);color:var(--med)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--pill);color:var(--pill-ink);border-radius:999px;padding:10px 18px;font-size:13px;font-weight:500;z-index:20;max-width:calc(100% - 32px)}
+@media (max-width:1100px){.grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+  .shell{grid-template-columns:minmax(0,1fr);padding:16px 14px 18px;border-radius:26px}
+  .side{flex-direction:row;overflow-x:auto;padding:2px 2px 6px}
+  .logo{margin:0 6px 0 0}.nav .tip{display:none}
+  .head{grid-template-columns:minmax(0,1fr)}.head-r{align-items:flex-start}
+  .kpis{justify-content:flex-start;gap:22px}
+  .head h1,.vt h1{font-size:28px}
+  .gauge-row,.ahero{grid-template-columns:minmax(0,1fr)}
+  .gauge{max-width:230px;margin:0 auto}
+  .card{padding:18px 16px;border-radius:24px}
+  .stream{margin:0 -16px -18px}
+  .row{grid-template-columns:auto minmax(0,1fr)}.row .id{display:none}
+  details.f summary{grid-template-columns:auto minmax(0,1fr) 28px}
+  details.f summary .id,details.f summary .ag{display:none}
+  .fbody{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="gArc" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#B5DE45"/><stop offset=".45" stop-color="#FFB13B"/><stop offset=".75" stop-color="#FF7A2F"/><stop offset="1" stop-color="#EC3A2A"/></linearGradient>
+  <linearGradient id="gFlow" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#45D86C"/><stop offset=".35" stop-color="#B5DE45"/><stop offset=".6" stop-color="#FFB13B"/><stop offset=".82" stop-color="#FF7A2F"/><stop offset="1" stop-color="#EC3A2A"/></linearGradient>
+  <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF9A3C"/><stop offset="1" stop-color="#EC3A2A"/></linearGradient>
+  <radialGradient id="glow" cx=".5" cy=".62" r=".6"><stop offset="0" stop-color="#EC3A2A" stop-opacity=".38"/><stop offset=".6" stop-color="#FF9A3C" stop-opacity=".16"/><stop offset="1" stop-color="#FFB13B" stop-opacity="0"/></radialGradient>
+</defs></svg>
+<div class="page"><div class="shell"><nav class="side" id="side" aria-label="Secciones"></nav><div class="main" id="main"><div class="card empty">Escaneando tu equipo…</div></div></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>
+'use strict';
+const ICON = {
+  logo:'<path d="M12 2.5 20 5.5V11c0 5-3.4 9-8 10.5C7.4 20 4 16 4 11V5.5z" fill="currentColor" stroke="none"/><circle cx="12" cy="11.5" r="3" fill="var(--shell-b)" stroke="none"/>',
+  resumen:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  agentes:'<rect x="6" y="6" width="12" height="12" rx="2.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9.5 2.5v3M14.5 2.5v3M9.5 18.5v3M14.5 18.5v3M2.5 9.5h3M2.5 14.5h3M18.5 9.5h3M18.5 14.5h3"/>',
+  mcp:'<path d="M9 2.5v5M15 2.5v5M6 7.5h12v3.5a6 6 0 0 1-12 0z M12 17v4.5"/>',
+  trifecta:'<path d="M12 3.5 21 19.5H3z"/><circle cx="12" cy="14" r="1.6" fill="currentColor"/>',
+  caminos:'<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7.3 10.8 16.7 6.2M7.3 13.2l9.4 4.6"/>',
+  hallazgos:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
+  cambios:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  moon:'<path d="M20.5 13.2A8.5 8.5 0 1 1 10.8 3.5a6.8 6.8 0 0 0 9.7 9.7z"/>',
+  refresh:'<path d="M20 11a8 8 0 0 0-14.6-4.5L3.5 9M4 13a8 8 0 0 0 14.6 4.5l1.9-2.5M3.5 4v5h5M20.5 20v-5h-5"/>'
+};
+const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SEVN = {crit:'Crítico', high:'Alto', med:'Medio', low:'Bajo', info:'Info'};
+const CAPN = {priv:'datos privados', untr:'no fiable', out:'salida'};
+const VIEWS = [['resumen','Resumen'],['agentes','Agentes'],['mcp','Servidores MCP'],['trifecta','Trifecta letal'],['caminos','Caminos de ataque'],['hallazgos','Hallazgos'],['cambios','Cambios']];
+let S = null, H = [], D = {changes:[]};
+let state = {view:'resumen', agent:null, fsev:'all', fag:'all', path:null, open:null, allPerms:false};
+
+const agent = id => S.agents.find(a => a.id === id);
+const aname = id => (agent(id) || {name:id}).name;
+const fOf = id => S.findings.filter(f => f.agent === id);
+const count = (list, sev) => list.filter(f => f.sev === sev).length;
+const sp = (s, t) => `<span class="sp ${esc(s)}">${esc(t || SEVN[s])}</span>`;
+const spsFor = list => ['crit','high','med','low'].filter(k => count(list,k)).map(k => { const n = count(list,k); return sp(k, `${n} ${SEVN[k].toLowerCase()}${n>1?'s':''}`); }).join('') || sp('ok','Sin hallazgos');
+const caps = cs => cs.length ? cs.map(c => `<span class="cap ${esc(c)}">${CAPN[c] || esc(c)}</span>`).join(' ') : '<span class="cap">desconocidas</span>';
+const STOPS = [[0,[69,216,108]],[.35,[181,222,69]],[.6,[255,177,59]],[.8,[255,122,47]],[1,[236,58,42]]];
+function heat(v){ const t = Math.max(0, Math.min(1, v/100)); for (let i = 1; i < STOPS.length; i++) if (t <= STOPS[i][0]) { const [t0,c0] = STOPS[i-1], [t1,c1] = STOPS[i], k = (t-t0)/(t1-t0); return `rgb(${c0.map((c,j) => Math.round(c+(c1[j]-c)*k)).join(',')})`; } return 'rgb(236,58,42)'; }
+const rb = r => `<div class="rb"><div class="rb-t"><i style="width:${r}%;background-size:${Math.round(10000/Math.max(r,1))}% 100%"></i></div><b>${r}</b></div>`;
+const initials = n => n.replace(/[^A-Za-zÁÉÍÓÚ ]/g,' ').split(/\s+/).filter(Boolean).slice(0,2).map(w => w[0]).join('').toUpperCase();
+const av = a => `<span class="av" style="background:${heat(a.risk)}">${esc(initials(a.name))}</span>`;
+const word = r => r >= 70 ? 'crítico' : r >= 50 ? 'alto' : r >= 30 ? 'medio' : 'bajo';
+function status(a){
+  const pub = (a.listeners || []).find(l => l.public);
+  if (pub) return `<span class="st net">${esc(pub.addr)}:${pub.port}</span>`;
+  if (a.running) return `<span class="st on">activo${a.pids && a.pids.length ? ' · pid ' + a.pids[0] : ''}</span>`;
+  return '<span class="st">instalado</span>';
+}
+const loc = e => e.file ? esc(e.file) + (e.line ? ':' + e.line : '') : '';
+const clip = (s, n) => (s = String(s ?? '')).length > n ? s.slice(0, n) + '…' : s;
+const cardHead = (t, extra = '') => `<div class="ch"><h3>${t}</h3>${extra}</div>`;
+const baseName = p => p ? p.split('/').filter(Boolean).pop() : '';
+const scopeLabel = p => p ? 'en ' + p : 'fuera de proyectos con reglas propias';
+const completeScopes = a => (a.scopes || []).filter(s => s.trifecta.complete);
+const stIcon = s => s === 'y' ? '<span class="warn">▲</span>' : s === 'p' ? '<span style="color:var(--med)">△</span>' : '<span class="note">·</span>';
+const fmtTime = t => new Date(t).toLocaleString('es-ES', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+
+/* ---------- gráficos ---------- */
+function arc(cx, cy, r, a0, a1){ const p = a => [cx + r*Math.cos(a*Math.PI/180), cy + r*Math.sin(a*Math.PI/180)]; const [x0,y0] = p(a0), [x1,y1] = p(a1); return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${a1-a0 > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; }
+function gauge(v, label){
+  return `<div class="gauge"><svg viewBox="0 0 220 190" role="img" aria-label="Riesgo ${v} de 100">
+    <path d="${arc(110,110,92,150,390)}" fill="none" stroke="var(--card-2)" stroke-width="14" stroke-linecap="round"/>
+    ${v > 0 ? `<path d="${arc(110,110,92,150,150+240*v/100)}" fill="none" stroke="url(#gArc)" stroke-width="14" stroke-linecap="round"/>` : ''}
+  </svg><div class="c"><b>${v}<small>/100</small></b><span>${esc(label)}</span></div></div>`;
+}
+function stream(){
+  const ag = S.agents.filter(a => !a.modelHost), n = ag.length;
+  const mcp = ag.flatMap(a => a.mcp.filter(m => !m.disabled));
+  const a1 = ag.filter(a => a.trifecta.priv === 'y').length, a2 = ag.filter(a => a.trifecta.priv === 'y' && a.trifecta.untr === 'y').length, a3 = ag.filter(a => a.trifecta.complete).length;
+  const m1 = mcp.filter(x => x.caps.includes('priv')).length, m2 = mcp.filter(x => x.caps.includes('untr')).length, m3 = mcp.filter(x => x.caps.includes('out')).length;
+  const pct = (x, t) => t ? Math.round(100*x/t) + '%' : '–';
+  const W = 620, Ht = 230, cy = Ht/2, M = 74;
+  const vals = [1, n ? a1/n : 0, n ? a2/n : 0, n ? a3/n : 0, n ? a3/n : 0].map(v => Math.max(v, .04));
+  const xs = [0, .18, .5, .82, 1].map(x => x*W);
+  const layer = k => { const pts = xs.map((x,i) => [x, M*vals[i]*k]);
+    let d = `M${pts[0][0]} ${cy-pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++){ const xm = (pts[i-1][0]+pts[i][0])/2; d += ` C${xm} ${cy-pts[i-1][1]} ${xm} ${cy-pts[i][1]} ${pts[i][0]} ${cy-pts[i][1]}`; }
+    d += ` L${pts[pts.length-1][0]} ${cy+pts[pts.length-1][1]}`;
+    for (let i = pts.length-1; i > 0; i--){ const xm = (pts[i-1][0]+pts[i][0])/2; d += ` C${xm} ${cy+pts[i][1]} ${xm} ${cy+pts[i-1][1]} ${pts[i-1][0]} ${cy+pts[i-1][1]}`; }
+    return d + ' Z'; };
+  const pill = (x, y, t) => `<rect class="pl" x="${x-29}" y="${y-15}" width="58" height="30" rx="15"/><text x="${x}" y="${y+4.5}" text-anchor="middle">${t}</text>`;
+  const st = [[.18, pct(a1,n), pct(m1,mcp.length)], [.5, pct(a2,n), pct(m2,mcp.length)], [.82, pct(a3,n), pct(m3,mcp.length)]];
+  return `<div class="mets"><div><span class="l">Con datos privados</span><b>${a1} <small>de ${n}</small></b></div><div><span class="l">Y contenido no fiable</span><b>${a2} <small>de ${n}</small></b></div><div><span class="l">Con las tres capacidades</span><b>${a3} <small>de ${n}</small></b></div></div>
+    <p class="note">Arriba, % de agentes · abajo, % de servidores MCP con esa capacidad</p>
+    <div class="stream"><svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="${a1} de ${n} agentes con datos privados, ${a2} además con contenido no fiable y ${a3} con las tres capacidades">
+      <path d="${layer(1)}" fill="url(#gFlow)" opacity=".22"/><path d="${layer(.7)}" fill="url(#gFlow)" opacity=".45"/><path d="${layer(.42)}" fill="url(#gFlow)"/>
+      ${st.map(([x,a,mm]) => { const X = x*W; return `<line class="dl" x1="${X}" x2="${X}" y1="38" y2="${Ht-38}"/>${pill(X,22,a)}${pill(X,Ht-22,mm)}`; }).join('')}
+    </svg></div>`;
+}
+function trend(){
+  if (H.length < 2) return `<p class="note">La tendencia aparece a partir del segundo escaneo guardado. Pulsa «Escanear de nuevo» o ejecuta <code>squadwatch scan</code> de vez en cuando.</p>`;
+  const pts = H.slice(-30), W = 560, Ht = 210, L = 30, R = 30, T = 18, B = 28, n = pts.length;
+  const x = i => L + i*(W-L-R)/(n-1), y = v => T + (100-v)*(Ht-T-B)/100;
+  let d = `M${x(0)} ${y(pts[0].risk)}`;
+  for (let i = 1; i < n; i++){ const xm = (x(i-1)+x(i))/2; d += ` C${xm} ${y(pts[i-1].risk)} ${xm} ${y(pts[i].risk)} ${x(i)} ${y(pts[i].risk)}`; }
+  const last = pts[n-1];
+  return `<div class="trend"><svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Riesgo del equipo en los últimos ${n} escaneos: de ${pts[0].risk} a ${last.risk}">
+    ${[0,25,50,75,100].map(v => `<text x="${L-10}" y="${y(v)+3.5}" text-anchor="end">${v}</text><line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`).join('')}
+    <path d="${d}" fill="none" stroke="url(#gArc)" stroke-width="2.8"/>
+    <circle cx="${x(n-1)}" cy="${y(last.risk)}" r="5" fill="var(--card)" stroke="#FF7A2F" stroke-width="2.5"/>
+    <text class="end" x="${x(n-1)}" y="${y(last.risk)-12}" text-anchor="end">${last.risk}</text>
+    <text x="${L}" y="${Ht-6}">${esc(fmtTime(pts[0].time))}</text><text x="${W-R}" y="${Ht-6}" text-anchor="end">${esc(fmtTime(last.time))}</text>
+  </svg></div>`;
+}
+function triSvg(a){
+  const t = a.trifecta, P = [110,32], U = [34,148], O = [186,148];
+  const e = (p,q) => (p === 'n' || q === 'n') ? 'e-off' : (p === 'y' && q === 'y') ? 'e-on' : 'e-half';
+  const yes = [t.priv,t.untr,t.out].filter(s => s === 'y').length;
+  return `<svg viewBox="0 0 220 180" role="img" aria-label="${esc(a.name)}: ${yes} de 3 sin confirmación">
+    ${t.complete ? `<polygon points="${P} ${U} ${O}" fill="url(#glow)"/>` : ''}
+    <line class="${e(t.priv,t.untr)}" x1="${P[0]}" y1="${P[1]}" x2="${U[0]}" y2="${U[1]}"/><line class="${e(t.priv,t.out)}" x1="${P[0]}" y1="${P[1]}" x2="${O[0]}" y2="${O[1]}"/><line class="${e(t.untr,t.out)}" x1="${U[0]}" y1="${U[1]}" x2="${O[0]}" y2="${O[1]}"/>
+    <circle class="v-${esc(t.priv)}" cx="${P[0]}" cy="${P[1]}" r="9"/><circle class="v-${esc(t.untr)}" cx="${U[0]}" cy="${U[1]}" r="9"/><circle class="v-${esc(t.out)}" cx="${O[0]}" cy="${O[1]}" r="9"/>
+    <text class="tri-lab" x="${P[0]+16}" y="${P[1]+4}">Datos privados</text><text class="tri-lab" x="${U[0]-8}" y="${U[1]+26}">No fiable</text><text class="tri-lab" x="${O[0]+8}" y="${O[1]+26}" text-anchor="end">Salida</text>
+    <text class="tri-sc" x="110" y="120" text-anchor="middle" ${t.complete ? 'style="fill:var(--crit)"' : ''}>${yes}/3</text>
+  </svg>`;
+}
+function pathGraph(sel){
+  const P = S.paths;
+  const who = p => aname(p.agent) + (p.scope ? ' · ' + baseName(p.scope) : '');
+  const cols = [['CONTENIDO NO FIABLE', p => p.source], ['AGENTE', who], ['DATOS PRIVADOS', p => p.data], ['SALIDA', p => p.sink]];
+  const W = 1100, NW = 190, NH = 40, top = 80, xs = [110, 400, 690, 980];
+  const nodes = cols.map(([, f]) => [...new Set(P.map(f))]);
+  const maxN = Math.max(...nodes.map(n => n.length));
+  const Hh = Math.max(240, top + (maxN-1)*70 + 40);
+  const pos = (c, label) => { const list = nodes[c], i = list.indexOf(label); return {x: xs[c], y: list.length === 1 ? (top + Hh - 40)/2 : top + i*((Hh-40-top)/(list.length-1))}; };
+  const edge = (c, a, b) => { const A = pos(c, a), B = pos(c+1, b), x1 = A.x+NW/2, x2 = B.x-NW/2, xm = (x1+x2)/2; return `M${x1} ${A.y} C${xm} ${A.y} ${xm} ${B.y} ${x2} ${B.y}`; };
+  let base = '', hi = '';
+  for (const p of P){ const v = cols.map(([, f]) => f(p));
+    for (let k = 0; k < 3; k++){ const d = edge(k, v[k], v[k+1]);
+      if (p === sel){ const cls = k === 2 && p.state === 'cut' ? 'cut' : k === 2 && p.state === 'partial' ? 'half' : 'sel'; hi += `<path class="pe ${cls}" d="${d}"/>`; }
+      else base += `<path class="pe ${p.state === 'open' ? 'faint' : ''}" d="${d}"/>`; } }
+  const on = new Set(sel ? cols.map(([, f], c) => c + '|' + f(sel)) : []);
+  const boxes = nodes.map((list, c) => list.map(l => { const {x, y} = pos(c, l); return `<g class="pg-node ${on.has(c+'|'+l) ? 'on' : ''} ${c === 1 ? 'ag' : ''}"><title>${esc(l)}</title><rect x="${x-NW/2}" y="${y-NH/2}" width="${NW}" height="${NH}" rx="20"/><text x="${x}" y="${y+4.5}" text-anchor="middle">${esc(clip(l, 26))}</text></g>`; }).join('')).join('');
+  return `<div class="gwrap"><svg class="graph" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Mapa de ${P.length} caminos de ataque">
+    <defs><linearGradient id="gSel" gradientUnits="userSpaceOnUse" x1="${xs[0]}" x2="${xs[3]}" y1="0" y2="0"><stop offset="0" stop-color="#FFB13B"/><stop offset="1" stop-color="#EC3A2A"/></linearGradient></defs>
+    ${cols.map(([h], c) => `<text class="pg-head" x="${xs[c]}" y="34" text-anchor="middle">${h}</text>`).join('')}${base}${hi}${boxes}</svg></div>`;
+}
+
+/* ---------- vistas ---------- */
+function header(){
+  const crit = count(S.findings, 'crit'), active = S.agents.filter(a => a.running).length;
+  return `<div class="head"><div><h1>Tus agentes de IA</h1><p>${esc(S.host)} · escaneo del ${esc(fmtTime(S.time))} · ${S.configsRead} ficheros leídos · sin ejecutar código de terceros</p></div>
+    <div class="head-r"><div class="tools"><span class="host">127.0.0.1 · solo este equipo</span><button class="bpill" id="rescan">${ic('refresh')}Escanear de nuevo</button><button class="ibtn" id="theme" aria-label="Cambiar tema">${ic('moon')}</button></div>
+      <div class="kpis"><div class="kpi"><div class="l">Agentes</div><div class="v"><b>${S.agents.length}</b><span class="opill">${active} activos</span></div></div>
+        <div class="kpi"><div class="l">Servidores MCP</div><div class="v"><b>${S.agents.reduce((n,a) => n + a.mcp.length, 0)}</b></div></div>
+        <div class="kpi"><div class="l">Hallazgos</div><div class="v"><b>${S.findings.length}</b>${crit ? `<span class="opill hot">${crit} crítico${crit > 1 ? 's' : ''}</span>` : ''}</div></div></div></div></div>`;
+}
+const vt = (t, sub, right = '') => `<div class="vt"><div><h1>${t}</h1><p>${sub}</p></div>${right}</div>`;
+
+function vResumen(){
+  if (!S.agents.length) return header() + `<div class="card empty">No se ha encontrado ningún agente de IA en este equipo.</div>`;
+  const top = S.agents.slice(0, 5), urgent = S.findings.filter(f => f.sev === 'crit' || f.sev === 'high');
+  return header() + `<div class="grid"><div class="col">
+      <section class="card">${cardHead('Riesgo del equipo')}<div class="gauge-row">${gauge(S.risk, 'riesgo ' + word(S.risk))}
+        <ul class="leaders">${top.map(a => `<li><button data-agent="${esc(a.id)}"><span class="dot" style="background:${heat(a.risk)}"></span><span>${esc(a.name)}</span><span class="fill"></span><span>${a.risk} <small>/100</small></span></button></li>`).join('')}
+        ${S.agents.length > 5 ? `<li><button class="link" data-go="agentes">Ver los ${S.agents.length} agentes</button></li>` : ''}</ul></div></section>
+      <section class="card flush">${cardHead('Superficie de ataque', `<button class="wpill" data-go="caminos">${ic('caminos')}Ver caminos</button>`)}${stream()}</section>
+    </div><div class="col">
+      <section class="card">${cardHead('Lo urgente', `<button class="wpill" data-go="hallazgos">${ic('hallazgos')}Todos los hallazgos</button>`)}
+        ${urgent.length ? `<div class="rows">${urgent.map(f => `<button class="row" data-go="hallazgos" data-open="${esc(f.key)}">${sp(f.sev)}<span class="id">${esc(f.id)}</span><span><b>${esc(aname(f.agent))}</b> · ${esc(f.title)}</span></button>`).join('')}</div>` : `<p class="note">Nada crítico ni alto.${S.findings.length ? ' Revisa los hallazgos medios cuando puedas.' : ''}</p>`}</section>
+      <section class="card">${cardHead('Tendencia del riesgo', `<span class="note">${H.length} escaneo${H.length === 1 ? '' : 's'} guardado${H.length === 1 ? '' : 's'}</span>`)}${trend()}</section>
+    </div></div>`;
+}
+
+function vAgentes(){
+  return vt('Agentes', 'Detectados por sus ficheros de configuración, procesos y puertos. Pulsa una fila para ver el detalle.')
+  + `<section class="card">${S.agents.length ? `<div class="tw"><table><thead><tr><th>Agente</th><th>Estado</th><th>Modo</th><th>MCP</th><th>Riesgo</th><th>Hallazgos</th></tr></thead><tbody>
+  ${S.agents.map(a => `<tr class="click" data-agent="${esc(a.id)}" tabindex="0"><td><div class="who">${av(a)}<div><b>${esc(a.name)}</b><span>${esc(a.kind)}${a.version ? ' · ' + esc(a.version) : ''}</span></div></div></td>
+    <td>${status(a)}</td><td class="nw"><code>${esc(a.mode || '–')}</code></td><td>${a.mcp.length || '–'}</td><td>${rb(a.risk)}</td><td><div class="sps">${spsFor(fOf(a.id))}</div></td></tr>`).join('')}
+  </tbody></table></div>` : '<p class="note">No se ha encontrado ningún agente.</p>'}</section>`;
+}
+
+function vAgente(id){
+  const a = agent(id); if (!a) return vAgentes();
+  const li = (arr, f) => arr && arr.length ? `<ul class="plain">${arr.map(f).join('')}</ul>` : '<p class="note">Ninguno.</p>';
+  const card = (t, body, cls = '') => `<section class="card ${cls}">${cardHead(t)}${body}</section>`;
+  const perms = kind => (a.perms || []).filter(p => p.kind === kind);
+  const permList = kind => { const ps = perms(kind); const shown = state.allPerms ? ps : ps.slice(0, 8);
+    return shown.map(p => `<div><code>${esc(clip(p.rule, 110))}</code></div>`).join('') + (ps.length > shown.length ? `<button class="link" id="allperms">Ver las ${ps.length}</button>` : ''); };
+  const t = a.trifecta;
+  return `<button class="link" data-go="agentes">← Agentes</button>
+  <section class="card"><div class="ahero"><div><div class="who">${av(a)}<div><b>${esc(a.name)}</b><span>${esc(a.kind)}${a.version ? ' · versión ' + esc(a.version) : ''}</span></div></div>
+    <div class="meta">${status(a)}${a.binary ? `<span><code>${esc(a.binary)}</code></span>` : ''}${(a.extras || []).map(x => `<span>${esc(x)}</span>`).join('')}</div></div>
+    ${gauge(a.risk, 'riesgo del agente')}</div></section>
+  <div class="dgrid">
+    ${card('Permisos', `<dl class="kv"><dt>Modo</dt><dd>${esc(a.mode || '–')}</dd>${a.sandbox ? `<dt>Sandbox</dt><dd>${esc(a.sandbox)}</dd>` : ''}
+      ${['allow','ask','deny'].map(k => perms(k).length ? `<dt>${({allow:'Permitido',ask:'Pregunta',deny:'Denegado'})[k]} (${perms(k).length})</dt><dd>${permList(k)}</dd>` : '').join('')}
+      ${(a.settings || []).map(s => `<dt><code>${esc(s.key)}</code></dt><dd>${esc(s.value)}</dd>`).join('')}</dl>`)}
+    ${!a.modelHost ? card('Trifecta' + (t.scope ? ' · peor caso ' + esc(t.scope) : ''), `<div style="display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr);gap:12px;align-items:center">${triSvg(a)}<dl class="kv"><dt>Datos</dt><dd>${esc((t.privWhy||[]).join(', ') || '—')}</dd><dt>No fiable</dt><dd>${esc((t.untrWhy||[]).join(', ') || '—')}</dd><dt>Salida</dt><dd>${esc((t.outWhy||[]).map(x => clip(x, 70)).join(', ') || '—')}</dd></dl></div>
+      ${(a.scopes || []).length ? `<div class="tw"><table><thead><tr><th>Proyecto</th><th>Datos</th><th>No fiable</th><th>Salida</th><th></th></tr></thead><tbody>${a.scopes.map(st => `<tr><td><code>${esc(st.project || 'resto')}</code></td><td>${stIcon(st.trifecta.priv)}</td><td>${stIcon(st.trifecta.untr)}</td><td title="${esc((st.trifecta.outWhy||[]).join(', '))}">${stIcon(st.trifecta.out)}</td><td>${st.trifecta.complete ? sp('crit','Cumple') : ''}</td></tr>`).join('')}</tbody></table></div><p class="note">Pasa el ratón por la columna «Salida» para ver el motivo.</p>` : ''}`, 'wide') : ''}
+    ${!a.modelHost ? card('Mitigaciones', (a.mitigations || []).length ? li(a.mitigations, m => `<li><span><span class="fine">✓</span> ${esc(m.detail)}</span>${m.project ? `<code>${esc(m.project)}</code>` : ''}</li>`) : `<p class="note">Ninguna. Squadwatch busca hooks que bloqueen comandos de red, sandbox de Bash activada y reglas deny sobre ~/.ssh.</p>`) : ''}
+    ${card('Servidores MCP', li(a.mcp, m => `<li><span><code>${esc(m.name)}</code> <span class="note">${esc(m.transport)} · ${esc(m.scope)}${m.disabled ? ' · desactivado' : ''}</span></span><span>${caps(m.caps)}${m.autoApproved ? ' <span class="warn">sin confirmación</span>' : ''}</span></li>`))}
+    ${card('Hooks', li(a.hooks, h => `<li><span><code>${esc(h.event)}</code> → <code>${esc(clip(h.command, 90))}</code></span>${h.issue ? `<span class="warn">${esc(h.issue)}</span>` : ''}${h.guards ? `<span class="fine">${esc(h.guards)}</span>` : ''}</li>`))}
+    ${card('Ficheros de instrucciones', li(a.instr, f => `<li><code>${esc(f.path)}</code>${f.hidden ? `<span class="warn">${f.hidden} caracteres invisibles</span>` : '<span class="fine">limpio</span>'}</li>`))}
+    ${a.listeners && a.listeners.length ? card('Puertos', li(a.listeners, l => `<li><code>${esc(l.addr)}:${l.port}</code>${l.public ? '<span class="warn">accesible desde la red</span>' : '<span class="fine">solo local</span>'}</li>`)) : ''}
+    ${card('Configuración leída', li(a.configs, c => `<li><code>${esc(c)}</code></li>`))}
+  </div>
+  <section class="card">${cardHead('Hallazgos de ' + esc(a.name))}${fOf(a.id).length ? `<div class="rows">${fOf(a.id).map(f => `<button class="row" data-go="hallazgos" data-open="${esc(f.key)}">${sp(f.sev)}<span class="id">${esc(f.id)}</span><span>${esc(f.title)}</span></button>`).join('')}</div>` : '<p class="note">Sin hallazgos.</p>'}</section>`;
+}
+
+function vMcp(){
+  const rows = S.agents.flatMap(a => a.mcp.map(m => ({a, m})));
+  return vt('Servidores MCP', 'Leídos de la configuración de cada agente. Squadwatch no arranca ningún servidor.')
+  + `<section class="card">${rows.length ? `<div class="tw"><table><thead><tr><th>Servidor</th><th>Agente</th><th>Comando o URL</th><th>Aporta</th><th>Versión</th><th>Credenciales</th></tr></thead><tbody>
+  ${rows.map(({a, m}) => `<tr><td><b>${esc(m.name)}</b><span class="sub">${esc(m.transport)} · ${esc(m.scope)}${m.disabled ? ' · desactivado' : ''}</span></td><td class="nw">${esc(a.name)}</td>
+    <td><code>${esc(clip(m.url || [m.command, ...(m.args || [])].join(' '), 90))}</code></td><td><div class="sps">${caps(m.caps)}</div></td>
+    <td class="nw">${m.pinned ? `<code>${esc(m.pin)}</code>` : `<span class="warn">${esc(m.pin)}</span>`}</td>
+    <td>${m.secrets && m.secrets.length ? m.secrets.map(s => `<span class="warn">${esc(s.key)} en texto plano</span>`).join('<br>') : (m.envKeys && m.envKeys.length ? 'variables de entorno' : '–')}</td></tr>`).join('')}
+  </tbody></table></div>` : '<p class="note">No hay servidores MCP configurados.</p>'}</section>`;
+}
+
+function vTrifecta(){
+  const ag = S.agents.filter(a => !a.modelHost);
+  return vt('Trifecta letal', 'Datos privados, contenido no fiable y una salida sin confirmación. Con las tres, una inyección de prompt puede sacar tus datos.')
+  + `<div class="keys"><span><svg width="16" height="16"><circle class="v-y" cx="8" cy="8" r="6"/></svg>Sin confirmación</span><span><svg width="16" height="16"><circle class="v-p" cx="8" cy="8" r="5.5"/></svg>Con confirmación</span><span><svg width="16" height="16"><circle class="v-n" cx="8" cy="8" r="6"/></svg>No la tiene</span></div>
+  ${ag.length ? `<div class="trigrid">${ag.map(a => `<button class="tri" data-agent="${esc(a.id)}"><div class="th"><b>${esc(a.name)}</b>${a.trifecta.complete ? sp('crit', completeScopes(a).length > 1 ? `Cumple en ${completeScopes(a).length} proyectos` : 'Cumple') : ''}</div>${triSvg(a)}${a.trifecta.scope ? `<span class="note">Peor caso: ${esc(a.trifecta.scope)}</span>` : ''}
+    <dl><dt>Datos</dt><dd>${esc((a.trifecta.privWhy||[]).slice(0,3).join(', ') || '—')}</dd><dt>No fiable</dt><dd>${esc((a.trifecta.untrWhy||[]).slice(0,3).join(', ') || '—')}</dd><dt>Salida</dt><dd>${esc((a.trifecta.outWhy||[]).slice(0,2).map(x => clip(x, 50)).join(', ') || '—')}</dd></dl></button>`).join('')}</div>` : '<div class="card empty">No hay agentes.</div>'}`;
+}
+
+function vCaminos(){
+  const P = S.paths;
+  if (!P.length) return vt('Caminos de ataque', 'Ningún agente junta datos privados y contenido no fiable. No hay caminos que mostrar.');
+  const sel = P.find(p => p.id === state.path) || P[0], a = aname(sel.agent) + (sel.scope ? ' (en ' + sel.scope + ')' : '');
+  const label = s => s === 'open' ? sp('crit','Abierto') : s === 'partial' ? sp('high','Con confirmación') : sp('ok','Cortado');
+  const steps = [`${a} lee contenido que no controlas: ${sel.source}. Ahí puede venir una instrucción escondida.`, `La instrucción le pide acceder a ${sel.data}.`,
+    sel.state === 'open' ? `Puede sacar el resultado con «${clip(sel.sink, 80)}» sin pedirte confirmación.` : sel.state === 'partial' ? `Para sacarlo necesita confirmación (${sel.sink}). Si apruebas sin leer, sale.` : `No tiene cómo sacarlo: ${sel.sink}.`];
+  const related = fOf(sel.agent).filter(f => ['TRI-001','AGT-001','AGT-002','AGT-004'].includes(f.id));
+  const totals = ['open','partial','cut'].map(s => { const n = P.filter(p => p.state === s).length; return n ? sp(s === 'open' ? 'crit' : s === 'partial' ? 'high' : 'ok', `${n} ${({open:'abierto',partial:'con confirmación',cut:'cortado'})[s]}${n > 1 && s !== 'partial' ? 's' : ''}`) : ''; }).join('');
+  return vt('Caminos de ataque', 'Por dónde podría entrar una instrucción maliciosa, qué datos tocaría y por dónde saldrían.', `<div class="sps">${totals}</div>`)
+  + `<section class="card">${cardHead('Mapa de caminos')}${pathGraph(sel)}<p class="note">Línea animada: camino seleccionado · rojo tenue: otros caminos abiertos · pasa el ratón por un nodo para ver el texto completo</p></section>
+  <div class="grid"><section class="card">${cardHead('Caminos detectados')}<div class="plist">${P.map(p => `<button class="pbtn" data-path="${esc(p.id)}" aria-pressed="${p.id === sel.id}"><div class="sps">${label(p.state)}<span class="mono">${esc(p.id)}</span></div><b>${esc(aname(p.agent))}${p.scope ? ` <span class="note">en ${esc(p.scope)}</span>` : ''}</b><span class="chain">${[p.source, aname(p.agent), p.data, p.sink].map(x => esc(clip(x, 60))).join(' → ')}</span></button>`).join('')}</div></section>
+    <section class="card">${cardHead('Cómo se explotaría')}<ol class="steps">${steps.map(s => `<li><span>${esc(s)}</span></li>`).join('')}</ol>
+      <div class="cut"><span class="k">Dónde cortarlo</span><b>${sel.state === 'open' ? 'Haz que la salida pida confirmación' : sel.state === 'partial' ? 'Lee bien cada confirmación o quita esa vía de salida' : 'Ya está cortado'}</b>
+        ${related.length ? `<div class="sps">${related.map(f => `<button class="wpill" data-go="hallazgos" data-open="${esc(f.key)}">${esc(f.id)} · ${esc(f.title)}</button>`).join('')}</div>` : ''}</div></section></div>`;
+}
+
+function vHallazgos(){
+  const list = S.findings.filter(f => (state.fsev === 'all' || f.sev === state.fsev) && (state.fag === 'all' || f.agent === state.fag));
+  const sevs = [['all','Todos'],['crit','Críticos'],['high','Altos'],['med','Medios']];
+  return vt('Hallazgos', 'Cada uno con su evidencia, por qué importa y cómo corregirlo.', `<div class="sps"><div class="seg">${sevs.map(([k,l]) => `<button data-fsev="${k}" aria-pressed="${state.fsev === k}">${l}</button>`).join('')}</div>
+    <label for="fag" style="position:absolute;left:-9999px">Agente</label><select id="fag" class="wpill">${['all', ...S.agents.map(a => a.id)].map(id => `<option value="${esc(id)}" ${state.fag === id ? 'selected' : ''}>${id === 'all' ? 'Todos los agentes' : esc(aname(id))}</option>`).join('')}</select></div>`)
+  + `<section class="card"><div class="flist">${list.length ? list.map(f => `<details class="f" ${state.open === f.key ? 'open' : ''}><summary>${sp(f.sev)}<span class="id">${esc(f.id)}</span><span class="t">${esc(f.title)}</span><span class="ag">${esc(aname(f.agent))}</span></summary>
+    <div class="fbody"><div class="full"><span class="k">Evidencia</span><div class="ev">${f.evidence.map(e => `<div>${e.file ? `<span class="ln">${loc(e)}</span>  ` : ''}${esc(e.text)}</div>`).join('')}</div></div>
+    <div><span class="k">Por qué importa</span><p>${esc(f.why)}</p></div><div><span class="k">Qué hacer</span><p>${esc(f.fix)}</p></div>
+    ${f.refs && f.refs.length ? `<div class="full refs">${f.refs.map(r => `<span>${esc(r)}</span>`).join('')}</div>` : ''}</div></details>`).join('') : '<p class="note">Ningún hallazgo con estos filtros.</p>'}</div></section>`;
+}
+
+function vCambios(){
+  const ch = D.changes || [];
+  return vt('Cambios', 'Diferencias entre los dos últimos escaneos guardados, e historial del riesgo.')
+  + `<section class="card">${cardHead('Último cambio', D.from ? `<span class="note">${esc(fmtTime(D.from))} → ${esc(fmtTime(D.to))}</span>` : '')}
+    ${D.from ? (ch.length ? `<div class="tl">${ch.map(c => `<div class="ti"><span class="mk ${esc(c.kind)}">${({add:'+',del:'−',mod:'~'})[c.kind] || '·'}</span><span>${esc(c.text)}</span>${c.sev ? sp(c.sev) : `<span class="note">${esc(c.area)}</span>`}</div>`).join('')}</div>` : '<p class="note">Sin cambios entre los dos últimos escaneos.</p>') : '<p class="note">Hacen falta al menos dos escaneos guardados.</p>'}</section>
+  <section class="card">${cardHead('Historial')}${H.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Riesgo</th><th>Agentes</th><th>Hallazgos</th><th>Críticos</th></tr></thead><tbody>${H.slice().reverse().map(p => `<tr><td class="nw">${esc(fmtTime(p.time))}</td><td>${rb(p.risk)}</td><td>${p.agents}</td><td>${p.findings}</td><td>${p.crit}</td></tr>`).join('')}</tbody></table></div>` : '<p class="note">Todavía no hay escaneos guardados.</p>'}</section>`;
+}
+
+/* ---------- render y navegación ---------- */
+function render(){
+  const v = state.view, cur = v === 'agente' ? 'agentes' : v;
+  document.getElementById('side').innerHTML = `<div class="logo">${ic('logo')}</div>` + VIEWS.map(([k,l]) => `<button class="nav" data-go="${k}" aria-label="${l}" aria-current="${k === cur ? 'page' : 'false'}">${ic(k)}<span class="tip">${l}</span>${k === 'hallazgos' && S.findings.length ? `<span class="badge">${S.findings.length}</span>` : ''}</button>`).join('');
+  const views = {resumen:vResumen, agentes:vAgentes, mcp:vMcp, trifecta:vTrifecta, caminos:vCaminos, hallazgos:vHallazgos, cambios:vCambios};
+  document.getElementById('main').innerHTML = v === 'agente' ? vAgente(state.agent) : (views[v] || vResumen)();
+}
+function route(){
+  const h = location.hash.slice(1);
+  if (h.startsWith('agente-') && S && agent(h.slice(7))) { state.view = 'agente'; state.agent = h.slice(7); }
+  else state.view = VIEWS.some(x => x[0] === h) ? h : 'resumen';
+  state.allPerms = false;
+  if (S) render();
+  window.scrollTo({top: 0});
+}
+const go = h => { if (location.hash !== '#' + h) location.hash = h; else route(); };
+let tt;
+function toast(m){ const t = document.getElementById('toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 3200); }
+async function load(refresh){
+  const btn = document.getElementById('rescan'); if (btn) btn.disabled = true;
+  try {
+    S = await (await fetch('/api/scan' + (refresh ? '?refresh=1' : ''))).json();
+    H = await (await fetch('/api/history')).json();
+    D = await (await fetch('/api/diff')).json();
+    route();
+    if (refresh) toast('Escaneo terminado y guardado en el historial');
+  } catch (e) {
+    document.getElementById('main').innerHTML = `<div class="card empty">No se pudo leer el escaneo. ¿Sigue en marcha <code>squadwatch serve</code>?</div>`;
+  }
+}
+document.addEventListener('click', e => {
+  if (e.target.closest('#theme')) { const r = document.documentElement, cur = r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); r.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark'); return; }
+  if (e.target.closest('#rescan')) return load(true);
+  if (e.target.closest('#allperms')) { state.allPerms = true; return render(); }
+  const el = e.target.closest('[data-go],[data-agent],[data-fsev],[data-path]');
+  if (!el) return;
+  if (el.dataset.path) { state.path = el.dataset.path; return render(); }
+  if (el.dataset.fsev) { state.fsev = el.dataset.fsev; return render(); }
+  if (el.dataset.agent) return go('agente-' + el.dataset.agent);
+  if (el.dataset.go) { if (el.dataset.open) { state.open = el.dataset.open; state.fsev = 'all'; state.fag = 'all'; } go(el.dataset.go); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('tr[data-agent]')) go('agente-' + e.target.dataset.agent); });
+document.addEventListener('change', e => { if (e.target.id === 'fag') { state.fag = e.target.value; render(); } });
+window.addEventListener('hashchange', route);
+load(false);
+</script>
+</body>
+</html>
